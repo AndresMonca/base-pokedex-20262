@@ -1,0 +1,458 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <meta name="description" content="Search and explore Pokemon in the Wikidex research device." />
+    <title>Wikidex &middot; Pokedex Interface</title>
+    <link rel="icon" href="data:," />
+    <link rel="preconnect" href="https://fonts.googleapis.com" />
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+    <link href="https://fonts.googleapis.com/css2?family=Nunito+Sans:wght@600;700;800;900&amp;display=swap" rel="stylesheet" />
+    <link rel="stylesheet" href="style.css" />
+  </head>
+  <body>
+    <main class="app-layout">
+      <aside class="control-column" hidden inert aria-hidden="true">
+        <img class="wikidex-logo" src="assets/images/wikidex-logo.png" alt="Wikidex" />
+      </aside>
+      <section class="device-stage" aria-label="Wikidex Pokedex">
+        <article class="pokedex" id="pokedex" aria-label="Closed Pokedex">
+          <div class="screen-spine">
+            <svg class="screen-clip-defs" width="0" height="0" aria-hidden="true" focusable="false">
+              <defs>
+                <clipPath id="screenShapeClip" clipPathUnits="objectBoundingBox">
+                  <rect id="screenClipPanel" x="0" y=".085" width="1" height=".83" />
+                  <ellipse id="screenClipTop" cx=".5" cy=".18" rx=".2" ry=".18" />
+                  <ellipse id="screenClipBottom" cx=".5" cy=".82" rx=".2" ry=".18" />
+                </clipPath>
+              </defs>
+            </svg>
+            <span class="closed-core" aria-hidden="true"></span>
+            <button class="power-button" id="powerButton" type="button" aria-label="Power on and open the Pokédex" title="Power on Pokédex">
+              <svg viewBox="0 0 32 32" fill="none" aria-hidden="true" focusable="false">
+                <path d="M16 4.5v12" />
+                <path d="M9.1 8.6a10.5 10.5 0 1 0 13.8 0" />
+              </svg>
+            </button>
+            <div class="screen-surface">
+              <div class="screen-backdrop" id="screenBackdrop" aria-hidden="true"></div>
+              <div class="home-wallpaper" aria-hidden="true">
+                <div class="showcase-scene">
+                  <canvas width="192" height="212"></canvas>
+                  <img alt="" />
+                  <span class="showcase-name"></span>
+                </div>
+                <div class="showcase-scene">
+                  <canvas width="192" height="212"></canvas>
+                  <img alt="" />
+                  <span class="showcase-name"></span>
+                </div>
+              </div>
+              <div class="screen-interface" id="screenInterface">
+                <section class="screen-state home-state" id="homeState" hidden aria-label="Wikidex home">
+                  <div class="home-content">
+                    <span class="home-eyebrow">YOUR DIGITAL POKÉDEX</span>
+                    <img class="home-logo" src="assets/images/wikidex-logo.png" alt="Wikidex" />
+                    <p class="home-intro">A Pokémon world waiting to be discovered</p>
+                    <div class="search-zone">
+                      <form class="search-form" id="searchForm" role="search">
+                        <label class="sr-only" for="pokemonSearch">Search Pokémon by name or number</label>
+                        <input id="pokemonSearch" type="search" role="combobox" spellcheck="false" autocapitalize="none" maxlength="80" placeholder="Pokémon name or number" autocomplete="off" aria-autocomplete="list" aria-controls="suggestions" aria-expanded="false" />
+                        <button type="submit" aria-label="Search Pokémon">
+                          <svg viewBox="0 0 24 24" aria-hidden="true">
+                            <circle cx="10.7" cy="10.7" r="5.8"></circle>
+                            <path d="m15.2 15.2 4.4 4.4"></path>
+                          </svg>
+                        </button>
+                      </form>
+                      <div class="home-suggestions">
+                        <ul class="suggestions" id="suggestions" role="listbox" aria-label="Pokémon suggestions" hidden></ul>
+                      </div>
+                    </div>
+                  </div>
+                </section>
+                <p class="sr-only" id="searchStatus" role="status" aria-atomic="true"></p>
+                <section class="screen-state loading-state" id="loadingState" hidden>
+                  <div class="scanner-loader" aria-hidden="true">
+                    <i>
+                    </i>
+                    <span>
+                    </span>
+                  </div>
+                  <strong>Scanning...</strong>
+                  <small>Reading Pokedex data</small>
+                </section>
+                <section class="screen-state error-state" id="errorState" hidden>
+                  <span class="error-symbol" aria-hidden="true">!</span>
+                  <strong id="errorTitle">Pokemon not found</strong>
+                  <p id="errorMessage">Check the name or Pokedex number and try again.</p>
+                </section>
+                <section class="screen-state album-state" id="albumState" hidden aria-label="Album filters">
+                  <button class="gym-back" id="gymBack" type="button" aria-label="Back to Pokémon Gym" title="Back to Pokémon Gym">
+                    <svg viewBox="0 0 24 24" fill="none" aria-hidden="true" focusable="false">
+                      <path d="M19 12H5m6-6-6 6 6 6" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"/>
+                    </svg>
+                  </button>
+                  <header class="album-filter-heading">
+                    <span>Pokémon Album</span>
+                    <strong>Filter by type</strong>
+                    <small id="albumScreenFilter">All types</small>
+                  </header>
+                  <div class="album-type-grid" id="albumTypeGrid"></div>
+                </section>
+                <section class="screen-state gym-state" id="gymState" hidden aria-label="Pokémon Gym">
+                  <header class="gym-heading">
+                    <span>Command center</span>
+                    <h2>Pokémon Gym</h2>
+                  </header>
+                  <div class="gym-options">
+                    <button class="gym-option gym-option-album" id="gymAlbum" type="button">
+                      <span class="gym-option-icon" aria-hidden="true">
+                        <svg viewBox="0 0 32 32" fill="none" focusable="false">
+                          <path d="M5.5 6.5c3.6-.8 7.1.1 10.5 2.6v17c-3.4-2.5-6.9-3.4-10.5-2.6v-17Z"/>
+                          <path d="M26.5 6.5c-3.6-.8-7.1.1-10.5 2.6v17c3.4-2.5 6.9-3.4 10.5-2.6v-17Z"/>
+                          <path d="M16 9.1v17"/>
+                        </svg>
+                      </span>
+                      <span class="gym-option-copy"><strong>Pokémon Album</strong><small>Your captured collection</small></span>
+                      <span class="gym-option-chevron" aria-hidden="true">›</span>
+                    </button>
+                    <button class="gym-option gym-option-future" type="button" disabled>
+                      <span class="gym-option-icon" aria-hidden="true">
+                        <svg viewBox="0 0 32 32" fill="none" focusable="false">
+                          <rect x="5" y="5" width="22" height="22" rx="5"/>
+                          <circle cx="11" cy="11" r="1.3"/><circle cx="21" cy="11" r="1.3"/>
+                          <circle cx="16" cy="16" r="1.3"/><circle cx="11" cy="21" r="1.3"/><circle cx="21" cy="21" r="1.3"/>
+                        </svg>
+                      </span>
+                      <span class="gym-option-copy"><strong>Pokémon Casino</strong><small>Feature unavailable</small></span>
+                    </button>
+                    <button class="gym-option gym-option-future" type="button" disabled>
+                      <span class="gym-option-icon" aria-hidden="true">
+                        <svg viewBox="0 0 32 32" fill="none" focusable="false">
+                          <rect x="8" y="14" width="16" height="13" rx="3"/>
+                          <path d="M11 14v-4a5 5 0 0 1 10 0v4"/>
+                        </svg>
+                      </span>
+                      <span class="gym-option-copy"><strong>Coming Soon</strong><small>Feature unavailable</small></span>
+                    </button>
+                  </div>
+                </section>
+                <div class="content-curtain" id="contentCurtain" aria-hidden="true">
+                  <span>
+                  </span>
+                </div>
+              </div>
+              <section class="screen-state pokemon-state" id="pokemonState" hidden>
+                <div class="identity-zone">
+                  <header class="pokemon-heading">
+                    <div>
+                      <h1 id="pokemonName">
+                      </h1>
+                      <div class="type-list" id="typeList">
+                      </div>
+                    </div>
+                    <span class="pokemon-id" id="pokemonId">
+                    </span>
+                  </header>
+                  <div class="artwork-stage">
+                    <span class="artwork-halo" aria-hidden="true">
+                    </span>
+                    <img id="pokemonArt" alt="" />
+                    <span class="capture-ball pokeball" id="captureBall" aria-hidden="true" hidden></span>
+                  </div>
+                </div>
+                <button class="shiny-toggle" id="shinyToggle" type="button" disabled aria-label="Show shiny version" aria-pressed="false" title="Show shiny version">
+                  <span aria-hidden="true">&#10022;</span>
+                </button>
+                <button class="capture-toggle" id="captureToggle" type="button" disabled aria-label="Capture Pokémon" aria-pressed="false">
+                  <span class="pokeball" aria-hidden="true"></span>
+                  <svg class="release-icon" viewBox="0 0 24 24" fill="none" aria-hidden="true" focusable="false">
+                    <path d="M12 16V4M7 9l5-5 5 5M5 16v4h14v-4" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"/>
+                  </svg>
+                </button>
+                <span class="sr-only" id="captureStatus" role="status" aria-live="polite"></span>
+              </section>
+            </div>
+            <button class="album-toggle" id="albumToggle" type="button" aria-label="Open Pokémon Gym" aria-pressed="false" title="Open Pokémon Gym">
+              <svg viewBox="0 0 32 32" fill="none" aria-hidden="true" focusable="false">
+                <path d="M11 6.5a1.5 1.5 0 0 1 2.3-1.3l14 9.5a1.6 1.6 0 0 1 0 2.6l-14 9.5a1.5 1.5 0 0 1-2.3-1.3v-19Z"/>
+              </svg>
+            </button>
+            <button class="search-toggle" id="searchToggle" type="button" aria-label="Search another Pokémon" title="Search another Pokémon">
+              <svg viewBox="0 0 24 24" fill="none" aria-hidden="true" focusable="false">
+                <circle cx="10.5" cy="10.5" r="5.9"></circle>
+                <path d="m15 15 4.6 4.6"></path>
+              </svg>
+            </button>
+            <span class="screen-edge screen-edge-left" aria-hidden="true">
+            </span>
+            <span class="screen-edge screen-edge-right" aria-hidden="true">
+            </span>
+          </div>
+          <aside class="side-drawer side-drawer-info" id="infoDrawer" aria-label="Essential Pokemon information" aria-hidden="true" inert>
+            <div class="drawer-inner" tabindex="0">
+              <header class="drawer-heading">
+                <span>Research file</span>
+                <strong>Essential info</strong>
+              </header>
+              <dl class="essentials-grid">
+                <div>
+                  <dt>Species</dt>
+                  <dd id="pokemonSpecies">&mdash;</dd>
+                </div>
+                <div>
+                  <dt>Height</dt>
+                  <dd id="pokemonHeight">&mdash;</dd>
+                </div>
+                <div>
+                  <dt>Weight</dt>
+                  <dd id="pokemonWeight">&mdash;</dd>
+                </div>
+                <div>
+                  <dt>Abilities</dt>
+                  <dd id="pokemonAbilities">&mdash;</dd>
+                </div>
+              </dl>
+              <figure class="battle-sprite-card">
+                <figcaption>
+                  <span>Battle sprite</span>
+                  <strong id="battleSpriteMode">Normal</strong>
+                </figcaption>
+                <div class="battle-sprite-frame">
+                  <img id="battleSprite" alt="" />
+                </div>
+              </figure>
+            </div>
+          </aside>
+          <aside class="side-drawer side-drawer-stats" id="statsDrawer" aria-label="Pokemon stats and moves" aria-hidden="true" inert>
+            <div class="drawer-inner" tabindex="0">
+              <header class="drawer-heading">
+                <span>Battle analysis</span>
+                <strong>Stats &amp; moves</strong>
+              </header>
+              <div class="stats-list" id="statsList">
+              </div>
+              <div class="moves-block">
+                <span>Learned moves</span>
+                <div class="moves-list" id="movesList" tabindex="0" role="region" aria-label="Learned moves">
+                </div>
+              </div>
+            </div>
+          </aside>
+          <button class="side-trigger side-trigger-info" type="button" data-drawer="info" aria-controls="infoDrawer" aria-expanded="false">
+            <span class="trigger-mark" aria-hidden="">
+              <i>
+              </i>
+              <i>
+              </i>
+            </span>
+            <strong>Info</strong>
+          </button>
+          <button class="side-trigger side-trigger-stats" type="button" data-drawer="stats" aria-controls="statsDrawer" aria-expanded="false">
+            <span class="trigger-mark" aria-hidden="true">
+              <i>
+              </i>
+              <i>
+              </i>
+            </span>
+            <strong>Stats</strong>
+          </button>
+          <section class="shell-half shell-upper" aria-hidden="true">
+            <svg class="shell-art" viewBox="0 0 1000 400" fill="none" focusable="false">
+              <defs>
+                <linearGradient id="u-red" x1="120" y1="0" x2="820" y2="440" gradientUnits="userSpaceOnUse">
+                  <stop stop-color="#f15e70"/><stop offset=".25" stop-color="#e52e49"/><stop offset=".6" stop-color="#d60930"/><stop offset="1" stop-color="#a50022"/>
+                </linearGradient>
+                <linearGradient id="u-edge" x1="0" y1="0" x2="0" y2="400" gradientUnits="userSpaceOnUse">
+                  <stop stop-color="#ffb7c3"/><stop offset=".08" stop-color="#f15268"/><stop offset=".8" stop-color="#a00023"/><stop offset="1" stop-color="#5a0919"/>
+                </linearGradient>
+                <linearGradient id="u-black" x1="300" y1="180" x2="700" y2="490" gradientUnits="userSpaceOnUse">
+                  <stop stop-color="#626364"/><stop offset=".35" stop-color="#363738"/><stop offset=".7" stop-color="#1c1e1f"/><stop offset="1" stop-color="#292b2c"/>
+                </linearGradient>
+                <linearGradient id="u-bevel" x1="0" y1="0" x2="1" y2="0">
+                  <stop stop-color="#300816" stop-opacity=".6"/><stop offset=".025" stop-color="#ffb3c7" stop-opacity=".4"/><stop offset=".075" stop-color="#e52648" stop-opacity="0"/><stop offset=".92" stop-color="#a50022" stop-opacity="0"/><stop offset=".98" stop-color="#73051c" stop-opacity=".4"/><stop offset="1" stop-color="#300816" stop-opacity=".7"/>
+                </linearGradient>
+                <radialGradient id="u-shine" cx=".25" cy=".2" r=".8">
+                  <stop stop-color="#fff" stop-opacity=".7"/><stop offset=".38" stop-color="#ff8da5" stop-opacity=".3"/><stop offset="1" stop-color="#e71139" stop-opacity="0"/>
+                </radialGradient>
+                <radialGradient id="u-screw" cx=".32" cy=".22" r=".8">
+                  <stop stop-color="#d2dbdc"/><stop offset=".34" stop-color="#6c7375"/><stop offset=".63" stop-color="#181c1e"/><stop offset=".83" stop-color="#656c6e"/><stop offset="1" stop-color="#090d10"/>
+                </radialGradient>
+                <clipPath id="u-clip"><path d="M105 4H895Q996 4 996 105V384H4V105Q4 4 105 4Z"/></clipPath>
+              </defs>
+              <g>
+                <path class="shell-body" d="M105 4H895Q996 4 996 105V384H4V105Q4 4 105 4Z" fill="url(#u-red)" stroke="#321820" stroke-width="8"/>
+                <g clip-path="url(#u-clip)">
+                  <path d="M11 394V106Q11 11 106 11H894Q989 11 989 106V394" stroke="url(#u-edge)" stroke-width="9"/>
+                  <path d="M22 388V110Q22 23 110 23H888" stroke="#ffbcc6" stroke-opacity=".65" stroke-width="3"/>
+                  <path d="M12 120Q22 12 122 12H770L996 50 680 185 10 287Z" fill="#fff" opacity=".07"/>
+                  <path d="M4 4H996V400H4Z" fill="url(#u-bevel)"/>
+                  <g class="shell-corners" stroke-linecap="round">
+                    <path d="M139 3A139 139 0 0 1 3 139M269 3A269 269 0 0 1 3 269M861 3A139 139 0 0 0 997 139M731 3A269 269 0 0 0 997 269" stroke="#650d21" stroke-width="23"/>
+                    <path d="M139 3A139 139 0 0 1 3 139M269 3A269 269 0 0 1 3 269M861 3A139 139 0 0 0 997 139M731 3A269 269 0 0 0 997 269" stroke="#1f2021" stroke-width="12"/>
+                    <path d="M149 3A149 149 0 0 1 3 149M279 3A279 279 0 0 1 3 279M851 3A149 149 0 0 0 997 149M721 3A279 279 0 0 0 997 279" stroke="#ff899b" stroke-width="4"/>
+                  </g>
+                  <path d="M19 113Q20 20 115 19H127A127 127 0 0 1 19 127Z" fill="url(#u-shine)"/>
+                  <path d="M981 113Q980 20 885 19H873A127 127 0 0 0 981 127Z" fill="url(#u-shine)"/>
+                  <path d="M27 105Q27 30 103 28" stroke="#ffe4e9" stroke-width="7" opacity=".62" stroke-linecap="round"/>
+                </g>
+                <g class="shell-fastener">
+                  <circle cx="500" cy="137" r="29" fill="#850b22" stroke="#b51c32" stroke-width="4"/>
+                  <circle cx="500" cy="137" r="23" fill="#111517" stroke="#350b12" stroke-width="4"/>
+                  <circle cx="500" cy="137" r="16" fill="url(#u-screw)"/>
+                  <circle cx="500" cy="137" r="7" fill="#080c0e"/>
+                  <path d="M491 129L495 126" stroke="#edf5f6" stroke-width="3" stroke-linecap="round"/>
+                </g>
+                <g class="shell-ring">
+                  <path class="ring-seat" d="M173.771552 384A24 24 0 0 0 195.826433 369.464789A331 331 0 0 1 804.173567 369.464789A24 24 0 0 0 826.228448 384V402H173.771552Z" fill="url(#u-black)"/>
+                  <path class="metal-outline" d="M120 384H173.771552A24 24 0 0 0 195.826433 369.464789A331 331 0 0 1 804.173567 369.464789A24 24 0 0 0 826.228448 384H880" stroke="#293537" stroke-width="22" stroke-linejoin="round"/>
+                  <path class="metal-body" d="M120 384H173.771552A24 24 0 0 0 195.826433 369.464789A331 331 0 0 1 804.173567 369.464789A24 24 0 0 0 826.228448 384H880" stroke="#d2dcde" stroke-width="17" stroke-linejoin="round"/>
+                  <path class="metal-highlight" d="M120 384H173.771552A24 24 0 0 0 195.826433 369.464789A331 331 0 0 1 804.173567 369.464789A24 24 0 0 0 826.228448 384H880" transform="translate(0 -3)" stroke="#f7ffff" stroke-width="5" stroke-linejoin="round"/>
+                  <path class="metal-shade" d="M120 384H173.771552A24 24 0 0 0 195.826433 369.464789A331 331 0 0 1 804.173567 369.464789A24 24 0 0 0 826.228448 384H880" transform="translate(0 5)" stroke="#7d9095" stroke-width="3" stroke-linejoin="round"/>
+                  <path d="M207.972604 399A309 309 0 0 1 792.027396 399" stroke="#a0a6a6" stroke-opacity=".5" stroke-width="2"/>
+                </g>
+              </g>
+            </svg>
+          </section>
+          <section class="shell-half shell-lower" aria-hidden="true">
+            <svg class="shell-art" viewBox="0 0 1000 400" fill="none" focusable="false">
+              <defs>
+                <linearGradient id="l-red" x1="120" y1="0" x2="820" y2="440" gradientUnits="userSpaceOnUse">
+                  <stop stop-color="#f15e70"/><stop offset=".25" stop-color="#e52e49"/><stop offset=".6" stop-color="#d60930"/><stop offset="1" stop-color="#a50022"/>
+                </linearGradient>
+                <linearGradient id="l-edge" x1="0" y1="0" x2="0" y2="400" gradientUnits="userSpaceOnUse">
+                  <stop stop-color="#ffb7c3"/><stop offset=".08" stop-color="#f15268"/><stop offset=".8" stop-color="#a00023"/><stop offset="1" stop-color="#5a0919"/>
+                </linearGradient>
+                <linearGradient id="l-black" x1="300" y1="180" x2="700" y2="490" gradientUnits="userSpaceOnUse">
+                  <stop stop-color="#626364"/><stop offset=".35" stop-color="#363738"/><stop offset=".7" stop-color="#1c1e1f"/><stop offset="1" stop-color="#292b2c"/>
+                </linearGradient>
+                <linearGradient id="l-bevel" x1="0" y1="0" x2="1" y2="0">
+                  <stop stop-color="#300816" stop-opacity=".6"/><stop offset=".025" stop-color="#ffb3c7" stop-opacity=".4"/><stop offset=".075" stop-color="#e52648" stop-opacity="0"/><stop offset=".92" stop-color="#a50022" stop-opacity="0"/><stop offset=".98" stop-color="#73051c" stop-opacity=".4"/><stop offset="1" stop-color="#300816" stop-opacity=".7"/>
+                </linearGradient>
+                <radialGradient id="l-shine" cx=".25" cy=".2" r=".8">
+                  <stop stop-color="#fff" stop-opacity=".7"/><stop offset=".38" stop-color="#ff8da5" stop-opacity=".3"/><stop offset="1" stop-color="#e71139" stop-opacity="0"/>
+                </radialGradient>
+                <radialGradient id="l-screw" cx=".32" cy=".22" r=".8">
+                  <stop stop-color="#d2dbdc"/><stop offset=".34" stop-color="#6c7375"/><stop offset=".63" stop-color="#181c1e"/><stop offset=".83" stop-color="#656c6e"/><stop offset="1" stop-color="#090d10"/>
+                </radialGradient>
+                <clipPath id="l-clip"><path d="M105 4H895Q996 4 996 105V384H4V105Q4 4 105 4Z"/></clipPath>
+              </defs>
+              <g transform="translate(1000 400) rotate(180)">
+                <path class="shell-body" d="M105 4H895Q996 4 996 105V384H4V105Q4 4 105 4Z" fill="url(#l-red)" stroke="#321820" stroke-width="8"/>
+                <g clip-path="url(#l-clip)">
+                  <path d="M11 394V106Q11 11 106 11H894Q989 11 989 106V394" stroke="url(#l-edge)" stroke-width="9"/>
+                  <path d="M22 388V110Q22 23 110 23H888" stroke="#ffbcc6" stroke-opacity=".65" stroke-width="3"/>
+                  <path d="M12 120Q22 12 122 12H770L996 50 680 185 10 287Z" fill="#fff" opacity=".07"/>
+                  <path d="M4 4H996V400H4Z" fill="url(#l-bevel)"/>
+                  <g class="shell-corners" stroke-linecap="round">
+                    <path d="M139 3A139 139 0 0 1 3 139M269 3A269 269 0 0 1 3 269M861 3A139 139 0 0 0 997 139M731 3A269 269 0 0 0 997 269" stroke="#650d21" stroke-width="23"/>
+                    <path d="M139 3A139 139 0 0 1 3 139M269 3A269 269 0 0 1 3 269M861 3A139 139 0 0 0 997 139M731 3A269 269 0 0 0 997 269" stroke="#1f2021" stroke-width="12"/>
+                    <path d="M149 3A149 149 0 0 1 3 149M279 3A279 279 0 0 1 3 279M851 3A149 149 0 0 0 997 149M721 3A279 279 0 0 0 997 279" stroke="#ff899b" stroke-width="4"/>
+                  </g>
+                  <path d="M19 113Q20 20 115 19H127A127 127 0 0 1 19 127Z" fill="url(#l-shine)"/>
+                  <path d="M981 113Q980 20 885 19H873A127 127 0 0 0 981 127Z" fill="url(#l-shine)"/>
+                  <path d="M27 105Q27 30 103 28" stroke="#ffe4e9" stroke-width="7" opacity=".62" stroke-linecap="round"/>
+                </g>
+                <g class="shell-fastener">
+                  <circle cx="500" cy="137" r="29" fill="#850b22" stroke="#b51c32" stroke-width="4"/>
+                  <circle cx="500" cy="137" r="23" fill="#111517" stroke="#350b12" stroke-width="4"/>
+                  <circle cx="500" cy="137" r="16" fill="url(#l-screw)"/>
+                  <circle cx="500" cy="137" r="7" fill="#080c0e"/>
+                  <path d="M491 129L495 126" stroke="#edf5f6" stroke-width="3" stroke-linecap="round"/>
+                </g>
+                <g class="shell-ring">
+                  <path class="ring-seat" d="M173.771552 384A24 24 0 0 0 195.826433 369.464789A331 331 0 0 1 804.173567 369.464789A24 24 0 0 0 826.228448 384V402H173.771552Z" fill="url(#l-black)"/>
+                  <path class="metal-outline" d="M120 384H173.771552A24 24 0 0 0 195.826433 369.464789A331 331 0 0 1 804.173567 369.464789A24 24 0 0 0 826.228448 384H880" stroke="#293537" stroke-width="22" stroke-linejoin="round"/>
+                  <path class="metal-body" d="M120 384H173.771552A24 24 0 0 0 195.826433 369.464789A331 331 0 0 1 804.173567 369.464789A24 24 0 0 0 826.228448 384H880" stroke="#d2dcde" stroke-width="17" stroke-linejoin="round"/>
+                  <path class="metal-highlight" d="M120 384H173.771552A24 24 0 0 0 195.826433 369.464789A331 331 0 0 1 804.173567 369.464789A24 24 0 0 0 826.228448 384H880" transform="translate(0 -3)" stroke="#f7ffff" stroke-width="5" stroke-linejoin="round"/>
+                  <path class="metal-shade" d="M120 384H173.771552A24 24 0 0 0 195.826433 369.464789A331 331 0 0 1 804.173567 369.464789A24 24 0 0 0 826.228448 384H880" transform="translate(0 5)" stroke="#7d9095" stroke-width="3" stroke-linejoin="round"/>
+                  <path d="M207.972604 399A309 309 0 0 1 792.027396 399" stroke="#a0a6a6" stroke-opacity=".5" stroke-width="2"/>
+                </g>
+              </g>
+            </svg>
+          </section>
+        </article>
+        <aside class="album-panel" id="albumPanel" hidden aria-hidden="true" aria-label="Captured Pokémon">
+          <header class="album-panel-heading">
+            <div class="album-heading-identity">
+              <span class="album-heading-icon" aria-hidden="true">
+                <svg viewBox="0 0 32 32" fill="none" focusable="false">
+                  <path d="M5.5 6.5c3.6-.8 7.1.1 10.5 2.6v17c-3.4-2.5-6.9-3.4-10.5-2.6v-17Z"/>
+                  <path d="M26.5 6.5c-3.6-.8-7.1.1-10.5 2.6v17c3.4-2.5 6.9-3.4 10.5-2.6v-17Z"/>
+                  <path d="M16 9.1v17"/>
+                </svg>
+              </span>
+              <div>
+                <span>Capture archive</span>
+                <h2>Pokémon Album</h2>
+              </div>
+            </div>
+            <div class="album-summary">
+              <strong id="albumCount">0</strong>
+              <span id="albumFilterName">All</span>
+            </div>
+            <button class="album-close" id="albumClose" type="button" aria-label="Back to Pokémon Gym" title="Back to Pokémon Gym">
+              <svg viewBox="0 0 24 24" fill="none" aria-hidden="true" focusable="false"><path d="M19 12H5m6-6-6 6 6 6"/></svg>
+            </button>
+            <div class="album-progress">
+              <div class="album-progress-caption">
+                <span>Pokémon captured</span>
+                <strong id="albumProgressText">Loading catalog…</strong>
+              </div>
+              <div class="album-progress-track" id="albumProgress" role="progressbar" aria-label="Capture progress" aria-valuemin="0" aria-valuemax="100" aria-valuetext="Loading catalog">
+                <span id="albumProgressFill"></span>
+              </div>
+            </div>
+          </header>
+          <div class="album-controls">
+            <label class="album-search">
+              <svg viewBox="0 0 24 24" fill="none" aria-hidden="true" focusable="false"><circle cx="10.7" cy="10.7" r="5.8"/><path d="m15.2 15.2 4.4 4.4"/></svg>
+              <input id="albumSearch" type="search" autocomplete="off" spellcheck="false" placeholder="Search Pokémon..." aria-label="Search Pokémon in the album" />
+            </label>
+            <div class="album-modes" role="group" aria-label="Album view">
+              <button type="button" data-album-mode="owned" aria-pressed="true">My Pokémon</button>
+              <button type="button" data-album-mode="all" aria-pressed="false">All</button>
+            </div>
+            <button class="album-current-type" id="albumCurrentType" type="button" hidden aria-label="Clear type filter"></button>
+          </div>
+          <div class="album-grid" id="albumGrid"></div>
+          <div class="album-empty" id="albumEmpty">
+            <span class="album-empty-ball" aria-hidden="true"></span>
+            <strong>No captures yet</strong>
+            <p>Capture a normal or shiny version to add it to the album.</p>
+          </div>
+          <nav class="album-pagination" aria-label="Album pages">
+            <button id="albumPrevious" type="button" aria-label="Previous page" disabled>
+              <svg viewBox="0 0 24 24" fill="none" aria-hidden="true" focusable="false"><path d="m14.5 5-7 7 7 7"/></svg>
+            </button>
+            <span id="albumPageLabel">Page 1 / 1</span>
+            <button id="albumNext" type="button" aria-label="Next page" disabled>
+              <svg viewBox="0 0 24 24" fill="none" aria-hidden="true" focusable="false"><path d="m9.5 5 7 7-7 7"/></svg>
+            </button>
+          </nav>
+          <span class="sr-only" id="albumStatus" role="status" aria-live="polite"></span>
+          <section class="album-detail" id="albumDetail" aria-labelledby="albumDetailTitle" hidden>
+            <header class="album-detail-header album-panel-heading">
+              <div class="album-heading-identity">
+                <span class="album-heading-icon" aria-hidden="true">
+                  <svg viewBox="0 0 32 32" fill="none" focusable="false">
+                    <path d="M5.5 6.5c3.6-.8 7.1.1 10.5 2.6v17c-3.4-2.5-6.9-3.4-10.5-2.6v-17Z"/>
+                    <path d="M26.5 6.5c-3.6-.8-7.1.1-10.5 2.6v17c3.4-2.5 6.9-3.4 10.5-2.6v-17Z"/>
+                    <path d="M16 9.1v17"/>
+                  </svg>
+                </span>
+                <div><span>Pokémon Album</span><h2 id="albumDetailTitle">Pokémon profile</h2></div>
+              </div>
+              <button id="albumDetailClose" type="button" aria-label="Back to album">← <span>Album</span></button>
+            </header>
+            <div class="album-detail-body" id="albumDetailBody" aria-live="polite"></div>
+          </section>
+        </aside>
+      </section>
+    </main>
+    <script src="script.js">
+    </script>
+  </body>
+</html>
