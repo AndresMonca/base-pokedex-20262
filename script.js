@@ -3,7 +3,8 @@
 
   const API_URL = "https://pokeapi.co/api/v2";
   const MAX_SUGGESTIONS = 5;
-  const ALBUM_PAGE_SIZE = 8;
+  const ALBUM_CARD_RATIO = 4 / 3;
+  let albumPageSize = 8;
   const CAPTURE_STORAGE_KEY = "wikidex-captures";
   const REQUEST_TIMEOUT = 12000;
   const IMAGE_FALLBACK = "assets/sprites/pokemon-placeholder.svg";
@@ -92,7 +93,22 @@
   const showcase = { timer: 0, controller: null, sequence: 0, visibleIndex: -1, lastId: null,
     sceneTypes: new Array(showcaseScenes.length).fill(null) };
   const artworkBounds = new Map();
-  const artworkScaleFallbacks = new Map([[10196, .82]]);
+  const fittedSprites = new Map();
+  const spriteSpaceObserver = new ResizeObserver((entries) => {
+    for (const { target } of entries) {
+      for (const [image, entry] of fittedSprites) {
+        if (entry.frame === target) layoutFittedSprite(image, entry.bounds);
+      }
+    }
+  });
+  new MutationObserver(() => {
+    for (const [image, entry] of fittedSprites) {
+      if (!image.isConnected) {
+        spriteSpaceObserver.unobserve(entry.frame);
+        fittedSprites.delete(image);
+      }
+    }
+  }).observe(document.documentElement, { childList: true, subtree: true });
   const artworkRefresh = String(Date.now());
 
   function clearLegacyStorage() {
@@ -652,11 +668,16 @@
         const heroRect = hero.getBoundingClientRect();
         const spriteRect = artwork.getBoundingClientRect();
         // Measure the untransformed canvas so its animation cannot move the focal point.
-        const spriteCenterY = spriteRect.top + spriteRect.height / 2 - heroRect.top - hero.clientTop;
-        const centerRatio = (spriteCenterY - backdrop.offsetTop) / backdrop.offsetHeight;
+        const visibleCenter = Number(artwork.dataset.visibleCenterY);
+        const scaleY = heroRect.height / hero.offsetHeight || 1;
+        const spriteCenterY = Number.isFinite(visibleCenter)
+          ? (stage.getBoundingClientRect().top - heroRect.top) / scaleY + visibleCenter - hero.clientTop
+          : (spriteRect.top + spriteRect.height / 2 - heroRect.top) / scaleY - hero.clientTop;
+        const centerRatio = spriteCenterY / hero.clientHeight;
         backdrop.style.transformOrigin = `50% ${centerRatio * 100}%`;
         drawShowcaseBurst(backdrop, pokemon.types, centerRatio, shiny);
       };
+      artwork.addEventListener("spritefit", alignCardBackdrop);
       const updateVariant = (loadedSource) => {
         hero.classList.toggle("is-shiny", shiny);
         alignCardBackdrop();
@@ -671,9 +692,26 @@
       shinyButton.addEventListener("click", async () => {
         shinyButton.disabled = true;
         shinyButton.setAttribute("aria-busy", "true");
-        let snapshot, sweep;
-        const cleanup = () => { snapshot?.remove(); sweep?.remove(); };
+        let flash, halo;
+        const particles = [];
+        const animations = new Set();
+        const normalFilter = getComputedStyle(artwork).filter;
+        const whiteFilter = "brightness(0) invert(1) drop-shadow(0 0 12px #fff)";
+        const run = (node, frames, duration, delay = 0) => {
+          const animation = node.animate(frames, { duration, delay, easing: "ease-in-out", fill: "forwards" });
+          animations.add(animation);
+          return animation.finished.catch(() => {});
+        };
+        const cleanup = () => {
+          animations.forEach((animation) => animation.cancel());
+          animations.clear();
+          flash?.remove(); halo?.remove(); particles.forEach((particle) => particle.remove());
+          hero.classList.remove("is-evolving");
+        };
+        const onMotionChange = () => { if (reducedMotion.matches) cleanup(); };
         controller.signal.addEventListener("abort", cleanup, { once: true });
+        reducedMotion.addEventListener("change", onMotionChange);
+        const canAnimate = () => !reducedMotion.matches && !controller.signal.aborted && hero.isConnected;
         try {
           let source;
           for (const candidate of shiny ? pokemon.battleImages : pokemon.battleShinyImages) {
@@ -681,42 +719,59 @@
             catch { controller.signal.throwIfAborted(); }
           }
           if (!source || controller.signal.aborted || !hero.isConnected) return;
-          if (!reducedMotion.matches) {
-            snapshot = hero.cloneNode(true);
-            snapshot.classList.add("album-repaint-snapshot");
-            snapshot.inert = true;
-            snapshot.setAttribute("aria-hidden", "true");
-            snapshot.querySelectorAll("[id]").forEach((node) => node.removeAttribute("id"));
-            const originalCanvas = hero.querySelector("canvas");
-            snapshot.querySelector("canvas").getContext("2d")?.drawImage(originalCanvas, 0, 0);
-            Object.assign(snapshot.style, {
-              position: "absolute", left: `${hero.offsetLeft}px`, top: `${hero.offsetTop}px`,
-              width: `${hero.offsetWidth}px`, height: `${hero.offsetHeight}px`, margin: "0"
-            });
-            body.append(snapshot);
-            sweep = makeElement("span", "album-repaint-sweep");
-            sweep.setAttribute("aria-hidden", "true");
-            hero.append(sweep);
+          if (canAnimate()) {
+            const cardRect = hero.getBoundingClientRect();
+            const spriteRect = artwork.getBoundingClientRect();
+            const x = spriteRect.left + spriteRect.width / 2 - cardRect.left - hero.clientLeft;
+            const y = spriteRect.top + spriteRect.height / 2 - cardRect.top - hero.clientTop;
+            hero.classList.add("is-evolving");
+            flash = makeElement("span", "album-evolution-flash");
+            halo = makeElement("span", "album-evolution-halo");
+            [flash, halo].forEach((node) => { node.setAttribute("aria-hidden", "true"); hero.append(node); });
+            halo.style.left = x + "px"; halo.style.top = y + "px";
+            flash.style.background = `radial-gradient(circle at ${x}px ${y}px,#fff,#fff9dd 75%)`;
+            await Promise.all([
+              run(artwork, [{ filter: normalFilter }, { filter: whiteFilter }], 700),
+              run(halo, [{ opacity: 0, transform: "translate(-50%,-50%) scale(.1)" }, { opacity: .8, transform: "translate(-50%,-50%) scale(.65)" }], 700)
+            ]);
+            if (canAnimate()) await Promise.all([
+              run(halo, [{ opacity: .8, transform: "translate(-50%,-50%) scale(.65)" }, { opacity: 1, transform: "translate(-50%,-50%) scale(3)" }], 650),
+              run(flash, [{ opacity: 0 }, { opacity: .94 }], 650)
+            ]);
+            if (canAnimate()) {
+              for (let i = 0; i < 8; i++) {
+                const spark = makeElement("span", "album-evolution-spark");
+                spark.setAttribute("aria-hidden", "true");
+                spark.style.left = x + "px"; spark.style.top = y + "px";
+                hero.append(spark); particles.push(spark);
+              }
+            }
           }
+          if (controller.signal.aborted || !hero.isConnected) return;
           shiny = !shiny;
           updateVariant(source);
-          if (snapshot) {
-            const timing = { duration: 620, easing: "cubic-bezier(.22,.68,.2,1)", fill: "forwards" };
-            const repaint = snapshot.animate([{ clipPath: "inset(0 0 0 0)" }, { clipPath: "inset(0 0 0 100%)" }], timing);
-            const light = sweep.animate([{ left: "-25%", opacity: 0 }, { opacity: .8, offset: .2 }, { left: "110%", opacity: 0 }], timing);
-            const stop = () => { repaint.cancel(); light.cancel(); cleanup(); };
-            const onMotionChange = () => { if (reducedMotion.matches) stop(); };
-            controller.signal.addEventListener("abort", stop, { once: true });
-            reducedMotion.addEventListener("change", onMotionChange);
-            await repaint.finished.catch(() => {});
-            controller.signal.removeEventListener("abort", stop);
-            reducedMotion.removeEventListener("change", onMotionChange);
+          if (flash?.isConnected && canAnimate()) {
+            particles.forEach((spark, index) => {
+              const angle = index * Math.PI / 4;
+              const distance = Math.min(hero.clientWidth, hero.clientHeight) * .38;
+              void run(spark, [
+                { opacity: 0, transform: "translate(-50%,-50%) scale(.3)" },
+                { opacity: 1, offset: .25 },
+                { opacity: 0, transform: `translate(calc(-50% + ${Math.cos(angle) * distance}px),calc(-50% + ${Math.sin(angle) * distance}px)) scale(.4)` }
+              ], 750);
+            });
+            await Promise.all([
+              run(artwork, [{ filter: whiteFilter }, { filter: normalFilter }], 850),
+              run(flash, [{ opacity: .94 }, { opacity: 0 }], 850),
+              run(halo, [{ opacity: 1 }, { opacity: 0 }], 850)
+            ]);
           }
         } catch {
           if (!controller.signal.aborted) shinyButton.title = "Could not load this variant. Try again.";
         } finally {
           cleanup();
           controller.signal.removeEventListener("abort", cleanup);
+          reducedMotion.removeEventListener("change", onMotionChange);
           shinyButton.disabled = !pokemon.battleShinyImages.length;
           shinyButton.removeAttribute("aria-busy");
         }
@@ -964,7 +1019,18 @@
     const openButton = makeElement("button", "album-card-open");
     openButton.type = "button";
     openButton.setAttribute("aria-label", `View details for ${pokemon.name}`);
-    const arrow = makeElement("span", "album-card-hint", "↗");
+    const arrow = makeElement("span", "album-card-hint");
+    const arrowIcon = document.createElementNS("http://www.w3.org/2000/svg", "svg");
+    arrowIcon.setAttribute("viewBox", "0 0 24 24");
+    arrowIcon.setAttribute("fill", "none");
+    const arrowPath = document.createElementNS("http://www.w3.org/2000/svg", "path");
+    arrowPath.setAttribute("d", "M6 18 18 6M7 6h11v11");
+    arrowPath.setAttribute("stroke", "currentColor");
+    arrowPath.setAttribute("stroke-width", "2");
+    arrowPath.setAttribute("stroke-linecap", "round");
+    arrowPath.setAttribute("stroke-linejoin", "round");
+    arrowIcon.append(arrowPath);
+    arrow.append(arrowIcon);
     arrow.setAttribute("aria-hidden", "true");
     openButton.append(arrow);
     openButton.addEventListener("click", () => openAlbumDetail(pokemon.id, showingShiny));
@@ -1077,12 +1143,21 @@
       .filter(({ pokemon }) => !query ||
         (numeric ? String(pokemon.id).startsWith(query) : matchesPokemonName(pokemon.name, query)))
       .sort((a, b) => a.pokemon.id - b.pokemon.id);
-    const pageCount = Math.max(1, Math.ceil(entries.length / ALBUM_PAGE_SIZE));
+    elements.albumGrid.hidden = entries.length === 0;
+    elements.albumEmpty.hidden = entries.length !== 0;
+    sizeAlbumPage();
+    const pageCount = Math.max(1, Math.ceil(entries.length / albumPageSize));
     albumNavigationEntries = entries;
     state.albumPage = Math.min(Math.max(1, state.albumPage), pageCount);
-    const start = (state.albumPage - 1) * ALBUM_PAGE_SIZE;
-    const visible = entries.slice(start, start + ALBUM_PAGE_SIZE);
-    elements.albumGrid.replaceChildren(...visible.map(createAlbumCard));
+    const start = (state.albumPage - 1) * albumPageSize;
+    const visible = entries.slice(start, start + albumPageSize);
+    const cards = visible.map(createAlbumCard);
+    const slots = entries.length ? Array.from({ length: albumPageSize - cards.length }, () => {
+      const slot = makeElement("div", "album-page-slot");
+      slot.setAttribute("aria-hidden", "true");
+      return slot;
+    }) : [];
+    elements.albumGrid.replaceChildren(...cards, ...slots);
     revealInterface(elements.albumGrid, 260);
     elements.albumCount.textContent = String(entries.length);
     elements.albumCount.title = `${capturedPokemon.size} total capture${capturedPokemon.size === 1 ? "" : "s"}`;
@@ -1102,6 +1177,34 @@
     elements.albumStatus.textContent = entries.length
       ? `${entries.length} Pokémon, page ${state.albumPage} of ${pageCount}`
       : "No matches";
+  }
+
+  function sizeAlbumPage() {
+    const grid = elements.albumGrid;
+    if (grid.hidden || !grid.clientWidth || !grid.clientHeight) return false;
+    const style = getComputedStyle(grid);
+    const width = grid.clientWidth - parseFloat(style.paddingLeft) - parseFloat(style.paddingRight);
+    const height = grid.clientHeight - parseFloat(style.paddingTop) - parseFloat(style.paddingBottom);
+    if (width <= 0 || height <= 0) return false;
+    const gapX = parseFloat(style.columnGap) || 0;
+    const gapY = parseFloat(style.rowGap) || 0;
+    // Prefer readable, spacious cards over packing many tiny cards onto each page.
+    const columns = Math.max(1, Math.round((width + gapX) / (260 + gapX)));
+    const columnWidth = (width - (columns - 1) * gapX) / columns;
+    const rows = Math.max(1, Math.round((height + gapY) / (columnWidth / ALBUM_CARD_RATIO + gapY)));
+    const cardWidth = Math.min(columnWidth,
+      (height - (rows - 1) * gapY) / rows * ALBUM_CARD_RATIO);
+    grid.style.setProperty("--album-columns", columns);
+    grid.style.setProperty("--album-rows", rows);
+    grid.style.setProperty("--album-card-width", `${cardWidth}px`);
+    grid.style.setProperty("--album-card-height", `${cardWidth / ALBUM_CARD_RATIO}px`);
+    const nextSize = columns * rows;
+    if (nextSize === albumPageSize) return false;
+    // Keep the first visible entry on the new page when the available space changes.
+    const firstEntry = (state.albumPage - 1) * albumPageSize;
+    albumPageSize = nextSize;
+    state.albumPage = Math.floor(firstEntry / albumPageSize) + 1;
+    return true;
   }
 
   function layoutAlbum() {
@@ -1257,6 +1360,106 @@
     if (elements.pokemonState.hidden) return;
     const headingBottom = pokemonHeading.offsetTop + pokemonHeading.offsetHeight;
     elements.pokemonState.style.setProperty("--artwork-top", `${Math.max(84, headingBottom + 12)}px`);
+    const stage = elements.pokemonArt.parentElement;
+    const identity = stage.parentElement.getBoundingClientRect();
+    if (!identity.height) return;
+    stage.style.bottom = "6px";
+    void fitMainArtwork();
+  }
+
+  let artworkFitSequence = 0;
+  async function fitMainArtwork() {
+    const pokemon = state.currentPokemon;
+    const image = elements.pokemonArt;
+    const source = image.currentSrc || image.src;
+    if (!pokemon || !source || !image.complete || !image.naturalWidth || elements.pokemonState.hidden) return;
+    const sequence = ++artworkFitSequence;
+    const [measured, normal, shiny] = await Promise.all([
+      measureArtwork(source, true), measureArtwork(pokemon.images[0], true),
+      measureArtwork(pokemon.shinyImages[0], true)
+    ]);
+    if (elements.pokemonState.hidden || sequence !== artworkFitSequence || state.currentPokemon !== pokemon ||
+        (image.currentSrc || image.src) !== source) return;
+    const current = measured || { width: image.naturalWidth, height: image.naturalHeight,
+      visibleWidth: 1, visibleHeight: 1, centerX: .5, centerY: .5 };
+    const stage = image.parentElement;
+    // Both variants share a visible center and longest dimension, regardless of PNG padding.
+    const shapes = [current, normal, shiny].filter(Boolean).map((bounds) => {
+      const width = bounds.width * bounds.visibleWidth;
+      const height = bounds.height * bounds.visibleHeight;
+      const longest = Math.max(width, height);
+      return { width: width / longest, height: height / longest };
+    });
+    const shape = { width: Math.max(...shapes.map((value) => value.width)),
+      height: Math.max(...shapes.map((value) => value.height)) };
+    const box = largestSpriteSpace(stage, shape, [elements.captureToggle, elements.shinyToggle, elements.albumToggle]);
+    const size = Math.min(box.width / shape.width, box.height / shape.height);
+    const scale = size / Math.max(current.width * current.visibleWidth, current.height * current.visibleHeight);
+    Object.assign(image.style, {
+      width: `${current.width * scale}px`, height: `${current.height * scale}px`,
+      left: `${box.left + box.width / 2 - current.centerX * current.width * scale}px`,
+      top: `${box.top + box.height / 2 - current.centerY * current.height * scale}px`
+    });
+    if (image.classList.contains("is-fitting")) {
+      image.classList.remove("is-fitting");
+      revealInterface(image, 240);
+    }
+  }
+
+  function largestSpriteSpace(stage, shape, controls) {
+    const rect = stage.getBoundingClientRect();
+    const width = stage.clientWidth, height = stage.clientHeight;
+    // Convert viewport coordinates back to local CSS pixels (the whole device can be scaled).
+    const sx = rect.width / width || 1, sy = rect.height / height || 1;
+    const obstacles = controls.filter((node) => !node.hidden && node.getClientRects().length)
+      .map((node) => {
+        const r = node.getBoundingClientRect();
+        return { left: (r.left - rect.left) / sx - 7, right: (r.right - rect.left) / sx + 7,
+          top: (r.top - rect.top) / sy - 7, bottom: (r.bottom - rect.top) / sy + 7 };
+      }).filter((r) => r.right > 4 && r.left < width - 4 && r.bottom > 4 && r.top < height - 4);
+    const xs = [...new Set([4, width - 4, ...obstacles.flatMap((r) => [r.left, r.right])])].filter((x) => x >= 4 && x <= width - 4).sort((a,b) => a-b);
+    const ys = [...new Set([4, height - 4, ...obstacles.flatMap((r) => [r.top, r.bottom])])].filter((y) => y >= 4 && y <= height - 4).sort((a,b) => a-b);
+    let best = { left: 4, top: 4, width: width - 8, height: height - 8 }, bestSize = -1, bestDistance = Infinity;
+    for (let l = 0; l < xs.length - 1; l++) for (let r = l + 1; r < xs.length; r++) {
+      for (let t = 0; t < ys.length - 1; t++) for (let b = t + 1; b < ys.length; b++) {
+        if (obstacles.some((o) => xs[l] < o.right && xs[r] > o.left && ys[t] < o.bottom && ys[b] > o.top)) continue;
+        const size = Math.min((xs[r] - xs[l]) / shape.width, (ys[b] - ys[t]) / shape.height);
+        const distance = Math.hypot((xs[l] + xs[r] - width) / 2, (ys[t] + ys[b] - height) / 2);
+        if (size > bestSize + .01 || (Math.abs(size - bestSize) < .01 && distance < bestDistance)) {
+          bestSize = size; bestDistance = distance;
+          best = { left: xs[l], top: ys[t], width: xs[r] - xs[l], height: ys[b] - ys[t] };
+        }
+      }
+    }
+    return best;
+  }
+
+  function fitShowcaseSprite(scene) {
+    const rect = scene.getBoundingClientRect();
+    if (!rect.height) return;
+    const search = elements.searchForm.getBoundingClientRect();
+    const label = scene.querySelector(".showcase-name").getBoundingClientRect();
+    const screen = elements.screenInterface.getBoundingClientRect();
+    const sy = rect.height / scene.clientHeight || 1;
+    const control = elements.albumToggle.getBoundingClientRect();
+    const controlTop = control.width && control.height ? control.top : screen.bottom;
+    const top = (Math.max(rect.top, search.bottom) - rect.top) / sy + 10;
+    const bottom = (Math.min(label.top, screen.bottom, controlTop) - rect.top) / sy - 10;
+    const box = { left: 10, top, width: scene.clientWidth - 20, height: Math.max(0, bottom - top) };
+    const image = scene.querySelector("img");
+    // One local-coordinate center drives both the visible sprite and the radial background.
+    image.dataset.visibleCenterY = String(top + box.height / 2);
+    Object.assign(image.style, {
+      top: `${top}px`, left: `${box.left}px`, width: `${box.width}px`,
+      height: `${box.height}px`, maxHeight: "none", transform: "none"
+    });
+    const source = image.src;
+    void measureArtwork(source, true).then((bounds) => {
+      if (!bounds || image.src !== source) return;
+      placeVisibleSprite(image, bounds, box);
+      const index = showcaseScenes.indexOf(scene);
+      if (showcase.sceneTypes[index]) drawShowcaseBurst(scene.querySelector("canvas"), showcase.sceneTypes[index], null, scene.dataset.shiny === "true");
+    });
   }
 
   function fitPokemonName() {
@@ -1306,9 +1509,13 @@
       anyOpen ||= open;
     });
     const covered = compactLayout.matches && anyOpen;
-    if (covered && elements.pokemonState.contains(document.activeElement)) {
+    elements.pokedex.classList.toggle("drawer-covered", covered);
+    if (covered && (elements.pokemonState.contains(document.activeElement) ||
+        [elements.searchToggle, elements.albumToggle].includes(document.activeElement))) {
       drawerButtons.find((button) => button.getAttribute("aria-expanded") === "true")?.focus();
     }
+    elements.searchToggle.inert = covered;
+    elements.albumToggle.inert = covered;
     elements.pokemonState.inert = covered;
     elements.pokemonState.setAttribute("aria-hidden", String(covered));
   }
@@ -1338,22 +1545,23 @@
   async function curtainTransition(update, sequence) {
     if (sequence !== state.requestSequence) return;
     if (reducedMotion.matches) {
-      update();
+      await update();
       return;
     }
     let animation;
     try {
       animation = elements.contentCurtain.animate(
-        [{ transform: "translateY(-102%)" }, { transform: "translateY(0)" }],
-        { duration: 220, easing: "ease-in", fill: "forwards" },
+        [{ transform: "translateY(0)", opacity: 0 }, { transform: "translateY(0)", opacity: 1 }],
+        { duration: 180, easing: "ease-out", fill: "forwards" },
       );
       await animation.finished;
       if (sequence !== state.requestSequence) return;
-      update();
+      await update();
+      if (sequence !== state.requestSequence) return;
       animation.cancel();
       animation = elements.contentCurtain.animate(
-        [{ transform: "translateY(0)" }, { transform: "translateY(102%)" }],
-        { duration: 260, easing: "ease-out", fill: "forwards" },
+        [{ transform: "translateY(0)", opacity: 1 }, { transform: "translateY(0)", opacity: 0 }],
+        { duration: 380, easing: "cubic-bezier(.2,.7,.2,1)", fill: "forwards" },
       );
       await animation.finished;
     } catch (error) {
@@ -1414,6 +1622,19 @@
   function drawShowcaseBurst(canvas, types, centerRatio = null, gilded = false) {
     const context = canvas.getContext("2d");
     if (!context) return;
+    const frame = canvas.parentElement;
+    const scene = canvas.closest(".showcase-scene");
+    const visibleCenter = scene?.querySelector("img")?.dataset.visibleCenterY;
+    const pivotX = frame.clientWidth / 2;
+    const pivotY = centerRatio !== null ? frame.clientHeight * centerRatio
+      : visibleCenter !== undefined ? Number(visibleCenter) : frame.clientHeight * .6;
+    // A square enclosing the farthest corner covers the frame at EVERY rotation angle.
+    const radius = Math.ceil(Math.hypot(Math.max(pivotX, frame.clientWidth - pivotX),
+      Math.max(pivotY, frame.clientHeight - pivotY))) + 2;
+    Object.assign(canvas.style, { inset: "auto", left: `${pivotX - radius}px`,
+      top: `${pivotY - radius}px`, width: `${radius * 2}px`, height: `${radius * 2}px`,
+      transformOrigin: "50% 50%" });
+    if (canvas.width !== 320 || canvas.height !== 320) { canvas.width = 320; canvas.height = 320; }
     const { width, height } = canvas;
     const primary = showcaseColor(typeColors[types[0]] || typeColors.normal);
     const secondary = showcaseColor(typeColors[types[1]] || typeColors[types[0]] || typeColors.normal);
@@ -1422,14 +1643,12 @@
     context.clearRect(0, 0, width, height);
     context.fillStyle = `rgb(${base.join(",")})`;
     context.fillRect(0, 0, width, height);
-    const centerX = width / 2;
-    const wallpaperRect = homeWallpaper.getBoundingClientRect();
-    const searchRect = elements.searchForm.getBoundingClientRect();
-    const interfaceRect = elements.screenInterface.getBoundingClientRect();
-    const centerY = centerRatio !== null ? height * centerRatio : wallpaperRect.height && searchRect.height && interfaceRect.height
-      ? height * ((searchRect.bottom + interfaceRect.bottom) / 2 - wallpaperRect.top) / wallpaperRect.height
-      : height * .6;
-    canvas.style.transformOrigin = `50% ${centerY / height * 100}%`;
+    const centerX = width / 2, centerY = height / 2;
+    // Both crossfade layers and newly opened cards use the same document clock.
+    // Redrawing colors never restarts the movement or gives the layers different angles.
+    for (const animation of canvas.getAnimations()) {
+      if (animation.animationName === "pokemon-backdrop-drift") animation.startTime = 0;
+    }
     for (let index = 0; index < 64; index += 1) {
       const angle = index * Math.PI * 2 / 64;
       const typeRay = gilded && index % 8 === 2;
@@ -1457,6 +1676,7 @@
   function redrawShowcaseScenes() {
     if (!elements.pokedex.classList.contains("home-active") || !elements.pokedex.classList.contains("is-settled")) return;
     showcaseScenes.forEach((scene, index) => {
+      fitShowcaseSprite(scene);
       if (showcase.sceneTypes[index]) drawShowcaseBurst(scene.querySelector("canvas"), showcase.sceneTypes[index], null, scene.dataset.shiny === "true");
     });
   }
@@ -1472,8 +1692,11 @@
     const sceneColor = drawShowcaseBurst(canvas, types, null, isShiny);
     if (sceneColor) elements.pokedex.style.setProperty("--home-scene-color", `rgb(${sceneColor.join(",")})`);
     elements.pokedex.style.setProperty("--home-search-type", typeColors[types[0]] || typeColors.normal);
+    scene.querySelector("img").onload = () => fitShowcaseSprite(scene);
     scene.querySelector("img").src = source;
     scene.querySelector(".showcase-name").textContent = `#${String(pokemon.id).padStart(3, "0")} · ${humanize(pokemon.name)}`;
+    fitShowcaseSprite(scene);
+    drawShowcaseBurst(canvas, types, null, isShiny);
     scene.classList.add("is-active");
     if (showcase.visibleIndex >= 0) {
       showcaseScenes[showcase.visibleIndex].classList.remove("is-active");
@@ -1670,6 +1893,8 @@
     const candidates = uniqueSources(...safeSources, IMAGE_FALLBACK);
     let index = 0;
     image.onload = () => {
+      if (image === elements.pokemonArt) void fitMainArtwork();
+      if (image.parentElement?.matches(".album-sprite-frame, .album-profile-stage, .battle-sprite-frame")) void fitVisibleSprite(image);
       if (image.closest(".album-detail-hero, .album-card, .album-related")) revealInterface(image, 220);
     };
     image.onerror = () => {
@@ -1681,13 +1906,99 @@
       }
     };
     image.alt = safeSources.length ? alt : `${alt} unavailable`;
+    delete image.dataset.visibleCenterY;
+    if (fittedSprites.has(image)) {
+      spriteSpaceObserver.unobserve(fittedSprites.get(image).frame);
+      fittedSprites.delete(image);
+      for (const property of ["width", "height", "left", "top"]) image.style.removeProperty(property);
+    }
     image.src = candidates[0];
+  }
+
+  function placeVisibleSprite(image, bounds, box) {
+    const scale = Math.min(box.width / (bounds.width * bounds.visibleWidth),
+      box.height / (bounds.height * bounds.visibleHeight));
+    if (!(scale > 0)) return;
+    Object.assign(image.style, {
+      width: `${bounds.width * scale}px`, height: `${bounds.height * scale}px`,
+      left: `${box.left + box.width / 2 - bounds.centerX * bounds.width * scale}px`,
+      top: `${box.top + box.height / 2 - bounds.centerY * bounds.height * scale}px`,
+      maxWidth: "none", maxHeight: "none"
+    });
+    image.dataset.visibleCenterY = String(box.top + box.height / 2);
+  }
+
+  function layoutFittedSprite(image, bounds) {
+    const frame = image.parentElement;
+    if (!image.isConnected || !frame.clientWidth || !frame.clientHeight) return;
+    const profile = frame.classList.contains("album-profile-stage");
+    const gallery = frame.classList.contains("album-sprite-frame");
+    const top = profile ? 28 : gallery ? 2 : 4;
+    const bottom = profile ? 40 : gallery ? 3 : 6;
+    const side = gallery ? 3 : 5;
+    placeVisibleSprite(image, bounds, {
+      left: side, top, width: frame.clientWidth - side * 2, height: frame.clientHeight - top - bottom
+    });
+    image.dispatchEvent(new Event("spritefit"));
+  }
+
+  async function fitVisibleSprite(image) {
+    const source = image.currentSrc || image.src;
+    const bounds = await measureArtwork(source, true);
+    if (!image.isConnected || (image.currentSrc || image.src) !== source || !image.naturalWidth) return;
+    const safeBounds = bounds || { width: image.naturalWidth, height: image.naturalHeight,
+      visibleWidth: 1, visibleHeight: 1, centerX: .5, centerY: .5 };
+    fittedSprites.set(image, { frame: image.parentElement, bounds: safeBounds });
+    spriteSpaceObserver.observe(image.parentElement);
+    layoutFittedSprite(image, safeBounds);
+  }
+
+  async function measureAnimatedArtwork(source) {
+    // The union of ALL composited frames keeps tails, wings and moving feet inside the box.
+    if (!("ImageDecoder" in window)) return null;
+    let decoder;
+    try {
+      const response = await fetch(source, { signal: AbortSignal.timeout(10000) });
+      if (!response.ok) return null;
+      decoder = new ImageDecoder({ data: await response.arrayBuffer(), type: "image/gif" });
+      await decoder.tracks.ready;
+      await decoder.completed;
+      const count = decoder.tracks.selectedTrack.frameCount;
+      const canvas = document.createElement("canvas");
+      const context = canvas.getContext("2d", { willReadFrequently: true });
+      let left = Infinity, top = Infinity, right = -1, bottom = -1;
+      for (let i = 0; i < count; i++) {
+        const { image } = await decoder.decode({ frameIndex: i });
+        try {
+          canvas.width = image.displayWidth;
+          canvas.height = image.displayHeight;
+          context.drawImage(image, 0, 0);
+          const pixels = context.getImageData(0, 0, canvas.width, canvas.height).data;
+          for (let y = 0; y < canvas.height; y++) {
+            for (let x = 0; x < canvas.width; x++) {
+              if (!pixels[(y * canvas.width + x) * 4 + 3]) continue;
+              left = Math.min(left, x); right = Math.max(right, x);
+              top = Math.min(top, y); bottom = Math.max(bottom, y);
+            }
+          }
+        } finally { image.close(); }
+      }
+      return right < left ? null : { width: canvas.width, height: canvas.height,
+        visibleWidth: (right - left + 1) / canvas.width, visibleHeight: (bottom - top + 1) / canvas.height,
+        centerX: (left + right + 1) / (2 * canvas.width), centerY: (top + bottom + 1) / (2 * canvas.height) };
+    } catch { return null; }
+    finally { decoder?.close(); }
   }
 
   function measureArtwork(source, preserveAllPixels = false) {
     if (!source) return Promise.resolve(null);
     const cacheKey = preserveAllPixels ? `${source}|full-alpha` : source;
     if (artworkBounds.has(cacheKey)) return artworkBounds.get(cacheKey);
+    if (/\.gif(?:[?#]|$)/i.test(source) || source.startsWith("data:image/gif")) {
+      const animation = measureAnimatedArtwork(source);
+      artworkBounds.set(cacheKey, animation);
+      return animation;
+    }
     const measurement = new Promise((resolve) => {
       const image = new Image();
       image.crossOrigin = "anonymous";
@@ -1744,44 +2055,16 @@
     return measurement;
   }
 
-  async function shinyArtworkPlacement(pokemon, normalSource, shinySource) {
-    const [normal, shiny] = await Promise.all([measureArtwork(normalSource), measureArtwork(shinySource)]);
-    if (!normal || !shiny) return { scale: artworkScaleFallbacks.get(pokemon.id) || 1, shiftX: 0, shiftY: 0 };
-    const width = elements.pokemonArt.clientWidth || 280;
-    const height = elements.pokemonArt.clientHeight || 250;
-    const placement = (artwork) => {
-      const fit = Math.min(width / artwork.width, height / artwork.height);
-      const renderedWidth = artwork.width * fit;
-      const renderedHeight = artwork.height * fit;
-      return {
-        size: Math.max(artwork.visibleWidth * renderedWidth, artwork.visibleHeight * renderedHeight),
-        centerX: (width - renderedWidth) / 2 + artwork.centerX * renderedWidth,
-        centerY: (height - renderedHeight) / 2 + artwork.centerY * renderedHeight,
-      };
-    };
-    const normalPlacement = placement(normal);
-    const shinyPlacement = placement(shiny);
-    const scale = Math.max(.6, Math.min(1, normalPlacement.size / shinyPlacement.size));
-    const stage = elements.pokemonArt.parentElement;
-    const maxShiftX = Math.max(0, (stage.clientWidth - width * scale) / 2);
-    const maxShiftY = Math.max(0, (stage.clientHeight - height * scale) / 2);
-    const shiftX = normalPlacement.centerX - (width / 2 + scale * (shinyPlacement.centerX - width / 2));
-    const shiftY = normalPlacement.centerY - (height / 2 + scale * (shinyPlacement.centerY - height / 2));
-    return {
-      scale,
-      shiftX: Math.max(-maxShiftX, Math.min(maxShiftX, shiftX)),
-      shiftY: Math.max(-maxShiftY, Math.min(maxShiftY, shiftY)),
-    };
-  }
-
   function setBattleSprite(pokemon, shiny) {
     setImage(elements.battleSprite, shiny ? pokemon.battleShinyImages : pokemon.battleImages,
       `${shiny ? "Shiny" : "Normal"} battle sprite of ${pokemon.name}`);
     elements.battleSpriteMode.textContent = shiny ? "Shiny" : "Normal";
   }
 
-  function renderPokemon(pokemon) {
+  async function renderPokemon(pokemon, preparedSource) {
     resetCapture();
+    artworkFitSequence += 1;
+    ["width", "height", "left", "top"].forEach((property) => elements.pokemonArt.style.removeProperty(property));
     elements.pokemonArt.style.setProperty("--artwork-scale", "1");
     elements.pokemonArt.style.setProperty("--artwork-shift-x", "0px");
     elements.pokemonArt.style.setProperty("--artwork-shift-y", "0px");
@@ -1793,7 +2076,8 @@
     setTheme(primaryType, pokemon.types[1] || primaryType);
     elements.pokemonName.textContent = pokemon.name;
     elements.pokemonId.textContent = `#${String(pokemon.id).padStart(3, "0")}`;
-    setImage(elements.pokemonArt, freshArtworkSources(pokemon.images), `Artwork of ${pokemon.name}`);
+    elements.pokemonArt.classList.add("is-fitting");
+    setImage(elements.pokemonArt, preparedSource ? [preparedSource] : freshArtworkSources(pokemon.images), `Artwork of ${pokemon.name}`);
     elements.shinyToggle.disabled = !pokemon.shinyImages.length;
     updateShinyControl();
     setBattleSprite(pokemon, false);
@@ -1830,6 +2114,11 @@
     fitPokemonName();
     syncArtworkSpace();
     elements.pokedex.setAttribute("aria-label", `Open Pokedex showing ${pokemon.name}`);
+    try { await elements.pokemonArt.decode(); } catch { /* The image fallback handler remains active. */ }
+    if (state.currentPokemon !== pokemon) return;
+    await new Promise(requestAnimationFrame);
+    if (state.currentPokemon !== pokemon) return;
+    await fitMainArtwork();
   }
 
   function preloadImage(source, signal) {
@@ -1863,11 +2152,7 @@
     state.shinyController = controller;
     const shiny = !state.isShiny;
     const sources = freshArtworkSources(shiny ? pokemon.shinyImages : pokemon.images);
-    const normalSource = shiny ? elements.pokemonArt.currentSrc || pokemon.images[0] : null;
-    if (shiny) {
-      void measureArtwork(normalSource);
-      void measureArtwork(sources[0]);
-    }
+
     elements.shinyToggle.disabled = true;
     try {
       let loaded;
@@ -1881,16 +2166,10 @@
       }
       if (state.currentPokemon !== pokemon || controller.signal.aborted) return;
       if (!loaded) throw new Error("IMAGE_ERROR");
-      const placement = shiny
-        ? await shinyArtworkPlacement(pokemon, normalSource, loaded)
-        : { scale: 1, shiftX: 0, shiftY: 0 };
-      if (state.currentPokemon !== pokemon || controller.signal.aborted) return;
-      elements.pokemonArt.style.setProperty("--artwork-scale", String(placement.scale));
-      elements.pokemonArt.style.setProperty("--artwork-shift-x", `${placement.shiftX}px`);
-      elements.pokemonArt.style.setProperty("--artwork-shift-y", `${placement.shiftY}px`);
       setImage(elements.pokemonArt, [loaded], `${shiny ? "Shiny" : "Normal"} artwork of ${pokemon.name}`);
       setBattleSprite(pokemon, shiny);
       state.isShiny = shiny;
+      void fitMainArtwork();
       updateShinyControl();
       elements.searchStatus.textContent = `${pokemon.name}: ${shiny ? "shiny" : "normal"} version.`;
     } catch {
@@ -1961,14 +2240,27 @@
     const catalogueMatch = state.pokemonNames.find(({ name }) =>
       normalizeQuery(name).replace(/-/g, "") === query.replace(/-/g, ""));
     const request = (query ? fetchPokemon(catalogueMatch?.name || query, controller.signal) : Promise.reject(new Error("EMPTY")))
-      .then((pokemon) => ({ pokemon }))
+      .then(async (pokemon) => {
+        const measurements = Promise.all([measureArtwork(pokemon.images[0], true),
+          measureArtwork(pokemon.shinyImages[0], true)]);
+        let source;
+        for (const candidate of uniqueSources(...freshArtworkSources(pokemon.images), IMAGE_FALLBACK)) {
+          controller.signal.throwIfAborted();
+          try { source = await preloadImage(candidate, controller.signal); break; } catch (error) {
+            if (controller.signal.aborted) throw error;
+          }
+        }
+        await Promise.all([measurements, measureArtwork(source, true)]);
+        controller.signal.throwIfAborted();
+        return { pokemon, source };
+      })
       .catch((error) => ({ error }));
     try {
       const [, result] = await Promise.all([openPokedex(), request]);
       if (sequence !== state.requestSequence) return;
-      await curtainTransition(() => {
+      await curtainTransition(async () => {
         if (result.error) renderError(result.error.message);
-        else renderPokemon(result.pokemon);
+        else await renderPokemon(result.pokemon, result.source);
       }, sequence);
       if (sequence !== state.requestSequence) return;
       elements.searchStatus.textContent = result.error ? elements.errorTitle.textContent : `${result.pokemon.name} loaded.`;
@@ -2172,8 +2464,8 @@
     const left = Math.min(0, (elements.infoDrawer.getBoundingClientRect().left - body.left) * unit);
     const right = Math.max(1000, (elements.statsDrawer.getBoundingClientRect().right - body.left) * unit);
     railPaths.forEach(({ path, template, lower }) => {
-      const start = (lower ? 1000 - right : left) + 7;
-      const end = (lower ? 1000 - left : right) - 7;
+      const start = (lower ? 1000 - right : left) + 5.5;
+      const end = (lower ? 1000 - left : right) - 5.5;
       path.setAttribute("d", template.replace(/^M[\d.-]+ /, `M${start.toFixed(4)} `).replace(/H[\d.-]+$/, `H${end.toFixed(4)}`));
     });
     railFrame = performance.now() < railAnimationEnd ? requestAnimationFrame(updateRails) : 0;
@@ -2197,9 +2489,18 @@
   const deviceResizeObserver = new ResizeObserver(fitDeviceToStage);
   deviceResizeObserver.observe(deviceStage);
   deviceResizeObserver.observe(elements.pokedex);
+  let albumResizeFrame = 0;
+  const albumPageObserver = new ResizeObserver(() => {
+    cancelAnimationFrame(albumResizeFrame);
+    albumResizeFrame = requestAnimationFrame(() => {
+      if (state.albumOpen && sizeAlbumPage()) renderAlbum();
+    });
+  });
+  albumPageObserver.observe(elements.albumGrid);
   const screenClipObserver = new ResizeObserver(() => {
     syncScreenShape();
     redrawShowcaseScenes();
+    syncArtworkSpace();
   });
   screenClipObserver.observe(elements.screenInterface);
   screenClipObserver.observe(elements.searchForm);
