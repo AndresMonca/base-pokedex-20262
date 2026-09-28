@@ -3,21 +3,18 @@
   <head>
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1" />
-    <meta name="description" content="Search and explore Pokemon in the Wikidex research device." />
-    <title>Wikidex &middot; Pokedex Interface</title>
-    <link rel="icon" href="data:," />
+    <meta name="description" content="Search and explore Pokémon in the Wikidex research device." />
+    <title>Wikidex · Pokémon Research</title>
+    <link rel="icon" href="assets/backgrounds/album-pokeball.png" />
     <link rel="preconnect" href="https://fonts.googleapis.com" />
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
     <link href="https://fonts.googleapis.com/css2?family=Nunito+Sans:wght@600;700;800;900&amp;display=swap" rel="stylesheet" />
-    <link rel="stylesheet" href="style.css" />
+    <link rel="stylesheet" href="style.css?v=profile-full-cover-194" />
   </head>
   <body>
     <main class="app-layout">
-      <aside class="control-column" hidden inert aria-hidden="true">
-        <img class="wikidex-logo" src="assets/images/wikidex-logo.png" alt="Wikidex" />
-      </aside>
-      <section class="device-stage" aria-label="Wikidex Pokedex">
-        <article class="pokedex" id="pokedex" aria-label="Closed Pokedex">
+<section class="device-stage" aria-label="Wikidex Pokédex">
+        <article class="pokedex" id="pokedex" aria-label="Closed Pokédex">
           <div class="screen-spine">
             <svg class="screen-clip-defs" width="0" height="0" aria-hidden="true" focusable="false">
               <defs>
@@ -52,9 +49,7 @@
               <div class="screen-interface" id="screenInterface">
                 <section class="screen-state home-state" id="homeState" hidden aria-label="Wikidex home">
                   <div class="home-content">
-                    <span class="home-eyebrow">YOUR DIGITAL POKÉDEX</span>
                     <img class="home-logo" src="assets/images/wikidex-logo.png" alt="Wikidex" />
-                    <p class="home-intro">A Pokémon world waiting to be discovered</p>
                     <div class="search-zone">
                       <form class="search-form" id="searchForm" role="search">
                         <label class="sr-only" for="pokemonSearch">Search Pokémon by name or number</label>
@@ -73,22 +68,13 @@
                   </div>
                 </section>
                 <p class="sr-only" id="searchStatus" role="status" aria-atomic="true"></p>
-                <section class="screen-state loading-state" id="loadingState" hidden role="status" aria-label="Loading Pok?mon">
-                  <div class="scanner-loader" aria-hidden="true">
-                    <svg viewBox="0 0 100 100" fill="none" focusable="false">
-                      <defs><linearGradient id="scanner-blue" x1="20" y1="10" x2="80" y2="90" gradientUnits="userSpaceOnUse"><stop stop-color="#c4f8fc"/><stop offset="1" stop-color="#65c5d8"/></linearGradient></defs>
-                      <circle cx="50" cy="50" r="43" fill="url(#scanner-blue)" stroke="#39879c" stroke-width="4"/>
-                      <path d="M8 50H92" stroke="#39879c" stroke-width="4"/>
-                      <path d="M17 28A38 38 0 0 1 71 18" stroke="#efffff" stroke-opacity=".7" stroke-width="3" stroke-linecap="round"/>
-                      <circle cx="50" cy="50" r="15" fill="#d9fbff" stroke="#39879c" stroke-width="4"/>
-                      <circle cx="50" cy="50" r="6" fill="#6bc8da"/>
-                    </svg>
-                  </div>
+                <section class="screen-state loading-state" id="loadingState" hidden role="status" aria-label="Loading Pokémon">
+                  <div class="scanner-loader" aria-hidden="true"><span class="pokeball"></span></div>
                 </section>
                 <section class="screen-state error-state" id="errorState" hidden>
                   <span class="error-symbol" aria-hidden="true">!</span>
-                  <strong id="errorTitle">Pokemon not found</strong>
-                  <p id="errorMessage">Check the name or Pokedex number and try again.</p>
+                  <strong id="errorTitle">Pokémon not found</strong>
+                  <p id="errorMessage">Check the name or Pokédex number and try again.</p>
                 </section>
                 <section class="screen-state album-state" id="albumState" hidden aria-label="Album filters">
                   <button class="gym-back" id="gymBack" type="button" aria-label="Back to Pokémon Gym" title="Back to Pokémon Gym">
@@ -98,14 +84,21 @@
                   </button>
                   <header class="album-filter-heading">
                     <span>Pokémon Album</span>
-                    <strong>Filter by type</strong>
+                    <strong id="albumFilterTitle">Explore your album</strong>
                     <small id="albumScreenFilter">All types</small>
                   </header>
-                  <div class="album-type-grid" id="albumTypeGrid"></div>
+                  <div class="album-filter-menu" id="albumFilterMenu"></div>
+                  <div class="album-type-grid" id="albumTypeGrid" hidden></div>
+                  <div class="album-filter-options" id="albumFilterOptions" hidden></div>
+                  <div class="album-filter-footer" id="albumFilterFooter">
+                    <span id="albumFilterHint">Combine filters to refine your album.</span>
+                    <button id="albumResetFilters" type="button" disabled>Reset filters</button>
+                  </div>
                 </section>
                 <section class="screen-state gym-state" id="gymState" hidden aria-label="Pokémon Gym">
+                  <button class="power-off" id="commandBack" type="button" aria-label="Back" title="Back"><svg viewBox="0 0 32 32" fill="none" aria-hidden="true"><path d="M24 16H8m7-7-7 7 7 7"/></svg></button>
                   <header class="gym-heading">
-                    <span>Command center</span>
+                    <span>Trainer hub</span>
                     <h2>Pokémon Gym</h2>
                   </header>
                   <div class="gym-options">
@@ -120,25 +113,10 @@
                       <span class="gym-option-copy"><strong>Pokémon Album</strong><small>Your captured collection</small></span>
                       <span class="gym-option-chevron" aria-hidden="true">›</span>
                     </button>
-                    <button class="gym-option gym-option-future" type="button" disabled>
-                      <span class="gym-option-icon" aria-hidden="true">
-                        <svg viewBox="0 0 32 32" fill="none" focusable="false">
-                          <rect x="5" y="5" width="22" height="22" rx="5"/>
-                          <circle cx="11" cy="11" r="1.3"/><circle cx="21" cy="11" r="1.3"/>
-                          <circle cx="16" cy="16" r="1.3"/><circle cx="11" cy="21" r="1.3"/><circle cx="21" cy="21" r="1.3"/>
-                        </svg>
-                      </span>
-                      <span class="gym-option-copy"><strong>Pokémon Casino</strong><small>Feature unavailable</small></span>
-                    </button>
-                    <button class="gym-option gym-option-future" type="button" disabled>
-                      <span class="gym-option-icon" aria-hidden="true">
-                        <svg viewBox="0 0 32 32" fill="none" focusable="false">
-                          <rect x="8" y="14" width="16" height="13" rx="3"/>
-                          <path d="M11 14v-4a5 5 0 0 1 10 0v4"/>
-                        </svg>
-                      </span>
-                      <span class="gym-option-copy"><strong>Coming Soon</strong><small>Feature unavailable</small></span>
-                    </button>
+<button class="gym-option" type="button" disabled><span class="gym-option-icon" aria-hidden="true">♠</span><span class="gym-option-copy"><strong>Pokémon Casino</strong><small>Unavailable</small></span></button>
+<button class="gym-option" type="button" disabled><span class="gym-option-icon" aria-hidden="true">?</span><span class="gym-option-copy"><strong>???</strong><small>Coming soon</small></span></button>
+                    
+                    
                   </div>
                 </section>
                 <div class="content-curtain" id="contentCurtain" aria-hidden="true">
@@ -149,30 +127,28 @@
               <section class="screen-state pokemon-state" id="pokemonState" hidden>
                 <div class="identity-zone">
                   <header class="pokemon-heading">
-                    <div>
+                    <div class="pokemon-identity">
                       <h1 id="pokemonName">
                       </h1>
-                      <div class="type-list" id="typeList">
-                      </div>
+                      <span class="pokemon-id" id="pokemonId">
+                      </span>
                     </div>
-                    <span class="pokemon-id" id="pokemonId">
-                    </span>
+                    <div class="type-list" id="typeList">
+                    </div>
                   </header>
                   <div class="artwork-stage">
                     <span class="artwork-halo" aria-hidden="true">
                     </span>
                     <img id="pokemonArt" alt="" />
-                    <span class="capture-ball pokeball" id="captureBall" aria-hidden="true" hidden></span>
+                    <span class="capture-ball capture-pokeball" id="captureBall" aria-hidden="true" hidden></span>
                   </div>
                 </div>
                 <button class="shiny-toggle" id="shinyToggle" type="button" disabled aria-label="Show shiny version" aria-pressed="false" title="Show shiny version">
-                  <span aria-hidden="true">&#10022;</span>
+                  <span aria-hidden="true"><svg viewBox="0 0 24 24" focusable="false"><path d="M12 1C10 8 8 10 1 12c7 2 9 4 11 11 2-7 4-9 11-11-7-2-9-4-11-11Z"/></svg></span>
                 </button>
                 <button class="capture-toggle" id="captureToggle" type="button" disabled aria-label="Capture Pokémon" aria-pressed="false">
-                  <span class="pokeball" aria-hidden="true"></span>
-                  <svg class="release-icon" viewBox="0 0 24 24" fill="none" aria-hidden="true" focusable="false">
-                    <path d="M12 16V4M7 9l5-5 5 5M5 16v4h14v-4" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"/>
-                  </svg>
+                  <span class="capture-pokeball" aria-hidden="true"></span>
+                  <svg class="capture-release-arrow" viewBox="0 0 16 16" fill="none" aria-hidden="true"><path d="M4 12 12 4M5 4h7v7" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/></svg>
                 </button>
                 <span class="sr-only" id="captureStatus" role="status" aria-live="polite"></span>
               </section>
@@ -193,34 +169,42 @@
             <span class="screen-edge screen-edge-right" aria-hidden="true">
             </span>
           </div>
-          <aside class="side-drawer side-drawer-info" id="infoDrawer" aria-label="Essential Pokemon information" aria-hidden="true" inert>
+          <aside class="side-drawer side-drawer-info" id="infoDrawer" aria-label="Essential Pokémon information" aria-hidden="true" inert>
             <div class="drawer-inner" tabindex="0">
-              <header class="drawer-heading">
-                <span>Research file</span>
-                <strong>Essential info</strong>
-              </header>
-              <dl class="essentials-grid">
+              <div class="pokemon-data-summary">
+                <header class="drawer-heading">
+                  <span>Research file</span>
+                  <strong>Essential info</strong>
+                </header>
+                <dl class="essentials-grid pokemon-description">
+                  <div>
+                    <dt>Species</dt>
+                    <dd id="pokemonSpecies">&mdash;</dd>
+                  </div>
+                  <div>
+                    <dt>Abilities</dt>
+                    <dd id="pokemonAbilities">&mdash;</dd>
+                  </div>
+                </dl>
+              </div>
+              <dl class="essentials-grid pokemon-measurements">
                 <div>
-                  <dt>Species</dt>
-                  <dd id="pokemonSpecies">&mdash;</dd>
-                </div>
-                <div>
-                  <dt>Height</dt>
-                  <dd id="pokemonHeight">&mdash;</dd>
+                  <dt>Generation</dt>
+                  <dd id="pokemonGeneration">&mdash;</dd>
                 </div>
                 <div>
                   <dt>Weight</dt>
                   <dd id="pokemonWeight">&mdash;</dd>
                 </div>
                 <div>
-                  <dt>Abilities</dt>
-                  <dd id="pokemonAbilities">&mdash;</dd>
+                  <dt>Height</dt>
+                  <dd id="pokemonHeight">&mdash;</dd>
                 </div>
               </dl>
               <figure class="battle-sprite-card">
                 <figcaption>
-                  <span>Battle sprite</span>
-                  <strong id="battleSpriteMode">Normal</strong>
+                  <span>BS</span>
+                  <strong id="battleSpriteMode">Base</strong>
                 </figcaption>
                 <div class="battle-sprite-frame">
                   <img id="battleSprite" alt="" />
@@ -228,7 +212,7 @@
               </figure>
             </div>
           </aside>
-          <aside class="side-drawer side-drawer-stats" id="statsDrawer" aria-label="Pokemon stats and moves" aria-hidden="true" inert>
+          <aside class="side-drawer side-drawer-stats" id="statsDrawer" aria-label="Pokémon stats and moves" aria-hidden="true" inert>
             <div class="drawer-inner" tabindex="0">
               <header class="drawer-heading">
                 <span>Battle analysis</span>
@@ -262,7 +246,7 @@
             <strong>Stats</strong>
           </button>
           <section class="shell-half shell-upper" aria-hidden="true">
-            <svg class="shell-art" viewBox="0 0 1000 400" fill="none" focusable="false">
+            <svg class="shell-art" preserveAspectRatio="none" viewBox="0 0 1000 400" fill="none" focusable="false">
               <defs>
                 <clipPath id="u-glass-clip"><path d="M173.771552 384A24 24 0 0 0 195.826433 369.464789A331 331 0 0 1 804.173567 369.464789A24 24 0 0 0 826.228448 384V402H173.771552Z"/></clipPath>
                 <linearGradient id="u-glass-reflection" x1="330" y1="165" x2="530" y2="400" gradientUnits="userSpaceOnUse">
@@ -356,7 +340,7 @@
             </svg>
           </section>
           <section class="shell-half shell-lower" aria-hidden="true">
-            <svg class="shell-art" viewBox="0 0 1000 400" fill="none" focusable="false">
+            <svg class="shell-art" preserveAspectRatio="none" viewBox="0 0 1000 400" fill="none" focusable="false">
               <defs>
                 <clipPath id="l-glass-clip"><path d="M173.771552 384A24 24 0 0 0 195.826433 369.464789A331 331 0 0 1 804.173567 369.464789A24 24 0 0 0 826.228448 384V402H173.771552Z"/></clipPath>
                 <linearGradient id="l-glass-reflection" x1="330" y1="165" x2="530" y2="400" gradientUnits="userSpaceOnUse">
@@ -451,8 +435,20 @@
           </section>
         </article>
         <aside class="album-panel" id="albumPanel" hidden aria-hidden="true" aria-label="Captured Pokémon">
+          <span class="album-fold-pokeball" aria-hidden="true"></span>
           <header class="album-panel-heading">
+            <div class="album-search-actions">
+            <label class="album-search">
+              <svg viewBox="0 0 24 24" fill="none" aria-hidden="true" focusable="false"><circle cx="10.7" cy="10.7" r="5.8"/><path d="m15.2 15.2 4.4 4.4"/></svg>
+              <input id="albumSearch" type="search" autocomplete="off" spellcheck="false" placeholder="Search Pokémon..." aria-label="Search Pokémon in the album" />
+            </label>
+            <button class="album-view-toggle" id="albumViewToggle" type="button" aria-label="Show My Pokémon" title="Show My Pokémon">All Pokémon</button>
+            <button class="album-mobile-filter-toggle" id="albumMobileFilterToggle" type="button" aria-label="Album filters" title="Album filters" aria-expanded="false" aria-controls="albumMobileFilters" hidden><svg viewBox="0 0 24 24" fill="none" aria-hidden="true"><path d="M4 7h16M4 17h16M9 4v6m6 4v6" stroke="currentColor" stroke-width="2" stroke-linecap="round"/></svg></button>
+            </div>
             <div class="album-heading-identity">
+              <button class="album-close" id="albumClose" type="button" aria-label="Back to Pokémon Gym" title="Back to Pokémon Gym">
+                <svg viewBox="0 0 24 24" fill="none" aria-hidden="true" focusable="false"><path d="M19 12H5m6-6-6 6 6 6"/></svg>
+              </button>
               <span class="album-heading-icon" aria-hidden="true">
                 <svg viewBox="0 0 32 32" fill="none" focusable="false">
                   <path d="M5.5 6.5c3.6-.8 7.1.1 10.5 2.6v17c-3.4-2.5-6.9-3.4-10.5-2.6v-17Z"/>
@@ -465,45 +461,46 @@
                 <h2>Pokémon Album</h2>
               </div>
             </div>
-            <div class="album-summary">
+            <div class="album-summary sr-only">
               <strong id="albumCount">0</strong>
               <span id="albumFilterName">All</span>
             </div>
-            <button class="album-close" id="albumClose" type="button" aria-label="Back to Pokémon Gym" title="Back to Pokémon Gym">
-              <svg viewBox="0 0 24 24" fill="none" aria-hidden="true" focusable="false"><path d="M19 12H5m6-6-6 6 6 6"/></svg>
-            </button>
-            <div class="album-progress">
-              <div class="album-progress-caption">
-                <span>Pokémon captured</span>
-                <strong id="albumProgressText">Loading catalog…</strong>
+            <div class="album-progress-strip">
+              <div class="album-progress-stat">
+              <button class="progress-toggle" id="progressToggle" type="button" aria-haspopup="dialog" aria-controls="progressDialog" aria-label="Collection progress">Progress</button>
+                <span class="album-page-indicator" id="albumPageLabel">Page 1 / 1</span>
               </div>
-              <div class="album-progress-track" id="albumProgress" role="progressbar" aria-label="Capture progress" aria-valuemin="0" aria-valuemax="100" aria-valuetext="Loading catalog">
-                <span id="albumProgressFill"></span>
+              <div class="album-progress-bars">
+                <label class="album-progress-row"><span>Base</span><progress id="albumTotalProgress" max="1" value="0"></progress><output id="albumTotalProgressLabel">—</output></label>
+                <label class="album-progress-row is-shiny"><span>Shiny</span><progress id="albumShinyProgress" max="1" value="0"></progress><output id="albumShinyProgressLabel">—</output></label>
               </div>
             </div>
           </header>
           <div class="album-controls">
-            <label class="album-search">
-              <svg viewBox="0 0 24 24" fill="none" aria-hidden="true" focusable="false"><circle cx="10.7" cy="10.7" r="5.8"/><path d="m15.2 15.2 4.4 4.4"/></svg>
-              <input id="albumSearch" type="search" autocomplete="off" spellcheck="false" placeholder="Search Pokémon..." aria-label="Search Pokémon in the album" />
-            </label>
+
             <div class="album-modes" role="group" aria-label="Album view">
               <button type="button" data-album-mode="owned" aria-pressed="true">My Pokémon</button>
               <button type="button" data-album-mode="all" aria-pressed="false">All</button>
             </div>
             <button class="album-current-type" id="albumCurrentType" type="button" hidden aria-label="Clear type filter"></button>
           </div>
-          <div class="album-grid" id="albumGrid"></div>
+          <section class="album-mobile-filters" id="albumMobileFilters" aria-label="Album filters" hidden>
+            <nav class="album-mobile-filter-nav" aria-label="Filter navigation">
+              <button id="albumMobileFilterBack" type="button" hidden>← Back</button>
+              <button id="albumMobileFilterDone" type="button">Show results</button>
+            </nav>
+            <div id="albumMobileFilterContent"></div>
+          </section>
+          <div class="album-grid" id="albumGrid" tabindex="0" aria-label="Pokémon Album. Use Page Up or Page Down to change pages." title="Scroll or use Page Up / Page Down to change pages"></div>
           <div class="album-empty" id="albumEmpty">
-            <span class="album-empty-ball" aria-hidden="true"></span>
+            <span class="album-empty-ball pokeball" aria-hidden="true"></span>
             <strong>No captures yet</strong>
-            <p>Capture a normal or shiny version to add it to the album.</p>
+            <p>Capture a base or shiny version to add it to the album.</p>
           </div>
           <nav class="album-pagination" aria-label="Album pages">
             <button id="albumPrevious" type="button" aria-label="Previous page" disabled>
               <svg viewBox="0 0 24 24" fill="none" aria-hidden="true" focusable="false"><path d="m14.5 5-7 7 7 7"/></svg>
             </button>
-            <span id="albumPageLabel">Page 1 / 1</span>
             <button id="albumNext" type="button" aria-label="Next page" disabled>
               <svg viewBox="0 0 24 24" fill="none" aria-hidden="true" focusable="false"><path d="m9.5 5 7 7-7 7"/></svg>
             </button>
@@ -519,16 +516,24 @@
                     <path d="M16 9.1v17"/>
                   </svg>
                 </span>
-                <div><span>Pokémon Album</span><h2 id="albumDetailTitle">Pokémon profile</h2></div>
+                <div><span>Pokémon Album</span><h2 id="albumDetailTitle">Pokémon Profile</h2></div>
               </div>
-              <button id="albumDetailClose" type="button" aria-label="Back to album">← <span>Album</span></button>
+              <button id="albumDetailClose" type="button" aria-label="Back to album" title="Back to album"><svg viewBox="0 0 24 24" fill="none" aria-hidden="true"><path d="M19 12H5m6-6-6 6 6 6" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/></svg></button>
             </header>
             <div class="album-detail-body" id="albumDetailBody" aria-live="polite"></div>
           </section>
         </aside>
       </section>
     </main>
-    <script src="script.js">
+    <dialog class="progress-dialog" id="progressDialog" aria-labelledby="progressTitle">
+      <header class="progress-heading"><div><span class="eyebrow">Capture archive</span><h2 id="progressTitle">Collection progress</h2></div><button id="progressClose" type="button" aria-label="Close progress">&times;</button></header>
+      <nav class="progress-tabs" aria-label="Progress sections"><button type="button" data-progress="overview" aria-pressed="true">Overview</button><button type="button" data-progress="generation" aria-pressed="false">Generation</button><button type="button" data-progress="type" aria-pressed="false">Type</button><button type="button" data-progress="category" aria-pressed="false">Category</button></nav>
+      <div id="progressContent" class="progress-content" aria-live="polite"></div>
+      <nav class="progress-pager" aria-label="Progress pages"><button id="progressPrevious" type="button" aria-label="Previous progress page">&larr;</button><span id="progressPage"></span><button id="progressNext" type="button" aria-label="Next progress page">&rarr;</button></nav>
+    </dialog>
+    <script src="assets/data/album-filter-index.js?v=1"></script>
+    <script src="script.js?v=profile-mystery-cover-193">
     </script>
   </body>
 </html>
+
