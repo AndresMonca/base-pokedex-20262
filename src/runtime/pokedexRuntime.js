@@ -1,19 +1,35 @@
-(() => {
+import { capturedAlternateVariant, createInitialState } from "../domain/appState.js";
+import { calculateCollectionProgress } from "../domain/collectionProgress.js";
+import { ALBUM_CARD_RATIO, albumDeviceLayout, chooseAlbumGrid, deviceOpeningFit, sideTriggersFitOutside } from "../domain/layout.js";
+import { humanize, matchesPokemonName, normalizeQuery } from "../domain/text.js";
+import {
+  captureEntriesFromMap, captureVariantKey, readCaptureEntries, writeCaptureEntries,
+} from "../services/captureStorage.js";
+import { createJsonClient } from "../services/jsonClient.js";
+import {
+  animatedPokemonSources, homeSpriteSources, mainPokemonSources,
+  searchMenuSpriteSources, uniqueSources,
+} from "../services/spriteSources.js";
+
+const RUNTIME_KEY = "__WIKIDEX_REACT_RUNTIME__";
+
+export function initPokedexRuntime() {
+  if (window[RUNTIME_KEY]?.started) return window[RUNTIME_KEY].dispose;
+  const runtimeRecord = { started: true, dispose: () => {} };
+  window[RUNTIME_KEY] = runtimeRecord;
+
   "use strict";
 
   // Configuration and shared visual tokens.
   const API_URL = "https://pokeapi.co/api/v2";
   // Visually verified 3D renders mislabeled as official-artwork by the API.
   // Only exclude the affected state; these forms have valid drawn shiny art.
-  const NON_DRAWN_OFFICIAL_ART = new Set(["10260:normal", "10261:normal", "10262:normal"]);
-  const ALBUM_CARD_RATIO = 4 / 3;
   let albumPageSize = 8;
-  const CAPTURE_STORAGE_KEY = "wikidex-captures";
   const REQUEST_TIMEOUT = 12000;
+  const fetchJson = createJsonClient({ timeout: REQUEST_TIMEOUT, maxEntries: 256 });
   const MOTION = Object.freeze({ micro:120, control:180, panel:280, scene:560, easing:"cubic-bezier(.2,.78,.18,1)" });
   const CAPTURE_TIMING = Object.freeze({flight:1000, absorb:1050, settle:1250, confirm:850, release:1450});
   const SPRITE_MARGIN = 5;
-  const dataCache = new Map();
   const progressState = { view:"overview", page:1, species:null, returnFocus:null };
   const ALBUM_SPRITE_URL = "https://raw.githubusercontent.com/PokeAPI/sprites/master/sprites/pokemon";
   const reducedMotion = window.matchMedia("(prefers-reduced-motion: reduce)");
@@ -42,33 +58,7 @@
     "special-attack": "SP. ATK", "special-defense": "SP. DEF", speed: "SPD",
   };
   // Application state and DOM references.
-  const state = {
-    pokemonNames: [],
-    selectedSuggestion: -1,
-    requestSequence: 0,
-    pendingQuery: "",
-    requestController: null,
-    shinyController: null,
-    openingPromise: null,
-    currentPokemon: null,
-    isShiny: false,
-    gymOpen: false,
-    gymReturnState: null,
-    gymReturnLabel: null,
-    albumOpen: false,
-    albumFilter: "all",
-    albumFilterView: "menu",
-    albumGeneration: "all",
-    albumCategory: "all",
-    albumVariant: "all",
-    albumMode: "all",
-    albumQuery: "",
-    albumPage: 1,
-    albumCatalogue: [],
-    albumCatalogueReady: false,
-    albumCatalogueError: false,
-    albumCloseTimer: 0,
-  };
+  const state = createInitialState();
   const elements = Object.fromEntries([
     "searchForm", "pokemonSearch", "suggestions", "searchStatus", "pokedex", "powerButton", "commandBack", "searchToggle",
     "contentCurtain", "screenInterface", "screenBackdrop", "homeState", "loadingState", "errorState", "pokemonState",
@@ -98,7 +88,6 @@
   // Resource caches and long-lived observers.
   const capturedVariants = new Set();
   const capturedPokemon = new Map();
-  const albumShinySelection = new Set();
   const captureAnimations = new Set();
   const albumTypeIds = new Map();
   const albumTypeRequests = new Map();
@@ -163,21 +152,8 @@
 
   // Storage
   function saveCaptures() {
-    const entries = [...capturedPokemon.values()].map(({ pokemon, shiny }) => ({
-      shiny,
-      pokemon: {
-        id: pokemon.id,
-        speciesId: pokemon.speciesId,
-        name: pokemon.name,
-        types: pokemon.types,
-        generationId: pokemon.generationId,
-        classification: pokemon.classification,
-        battleImages: pokemon.battleImages,
-        battleShinyImages: pokemon.battleShinyImages,
-      },
-    }));
     try {
-      window.localStorage.setItem(CAPTURE_STORAGE_KEY, JSON.stringify(entries));
+      writeCaptureEntries(window.localStorage, captureEntriesFromMap(capturedPokemon));
     } catch {
       elements.captureStatus.textContent = "The collection could not be saved in this browser.";
     }
@@ -185,27 +161,19 @@
 
   function restoreCaptures() {
     try {
-      const stored = window.localStorage.getItem(CAPTURE_STORAGE_KEY);
-      if (!stored) return;
-      const entries = JSON.parse(stored);
-      if (!Array.isArray(entries)) throw new TypeError("INVALID_CAPTURE_DATA");
+      const entries = readCaptureEntries(window.localStorage);
       entries.forEach(({ pokemon, shiny }) => {
-        const valid = Number.isInteger(pokemon?.id) && pokemon.id > 0 && typeof pokemon.name === "string" &&
-          Array.isArray(pokemon.types) && pokemon.types.every((type) => typeof type === "string") &&
-          Array.isArray(pokemon.battleImages) && pokemon.battleImages.every((source) => typeof source === "string") &&
-          Array.isArray(pokemon.battleShinyImages) && pokemon.battleShinyImages.every((source) => typeof source === "string") &&
-          typeof shiny === "boolean";
-        if (!valid) return;
-        const key = `${pokemon.id}:${shiny ? "shiny" : "normal"}`;
+        const key = captureVariantKey(pokemon.id, shiny);
         capturedVariants.add(key);
         capturedPokemon.set(key, { pokemon, shiny });
       });
     } catch {
-      // Keep the original value intact if a browser extension or old version wrote invalid data.
+      // Preserve the browser value; invalid or legacy data is never overwritten automatically.
       capturedVariants.clear();
       capturedPokemon.clear();
     }
   }
+
 
   function reconcileCaptureIds() {
     const idsByName = new Map(state.albumCatalogue.map(({ name, id }) => [normalizeQuery(name), id]));
@@ -237,15 +205,16 @@
       await Promise.resolve();
       try {
         let payload;
-        if (window.WIKIDEX_FILTER_INDEX) {
-          payload = { data: window.WIKIDEX_FILTER_INDEX };
-        } else {
-        const response = await fetch("https://graphql.pokeapi.co/v1beta2", {
-          method:"POST", headers:{"Content-Type":"application/json"}, signal:AbortSignal.timeout(20000),
-          body:JSON.stringify({ query:"query AlbumFilterIndex { pokemon { id is_default pokemonspecy { id generation_id is_legendary is_mythical } pokemontypes { type { name } } } generation { id } }" })
-        });
-        if (!response.ok) throw new Error("FILTER_DATA");
-        payload = await response.json();
+        try {
+          const { WIKIDEX_FILTER_INDEX } = await import("../data/albumFilterIndex.js");
+          payload = { data: WIKIDEX_FILTER_INDEX };
+        } catch {
+          const response = await fetch("https://graphql.pokeapi.co/v1beta2", {
+            method:"POST", headers:{"Content-Type":"application/json"}, signal:AbortSignal.timeout(20000),
+            body:JSON.stringify({ query:"query AlbumFilterIndex { pokemon { id is_default pokemonspecy { id generation_id is_legendary is_mythical } pokemontypes { type { name } } } generation { id } }" })
+          });
+          if (!response.ok) throw new Error("FILTER_DATA");
+          payload = await response.json();
         }
         if (payload.errors || !payload.data?.pokemon?.length) throw new Error("FILTER_DATA");
         const index = new Map();
@@ -310,99 +279,6 @@
       })
       .finally(() => albumTypeRequests.delete(type));
     albumTypeRequests.set(type, request);
-  }
-
-  async function fetchJson(url, signal, cache = "default") {
-    const controller = new AbortController();
-    const abort = () => controller.abort();
-    signal?.throwIfAborted();
-    if (dataCache.has(url)) return dataCache.get(url);
-    signal?.addEventListener("abort", abort, { once: true });
-    const timeout = window.setTimeout(abort, REQUEST_TIMEOUT);
-    try {
-      const response = await fetch(url, { signal: controller.signal, cache });
-      if (!response.ok) throw new Error(response.status === 404 ? "NOT_FOUND" : "API_ERROR");
-      const data = await response.json();
-      dataCache.set(url, data);
-      if (dataCache.size > 256) dataCache.delete(dataCache.keys().next().value);
-      return data;
-    } catch (error) {
-      signal?.throwIfAborted();
-      if (controller.signal.aborted) throw new Error("TIMEOUT");
-      throw error;
-    } finally {
-      window.clearTimeout(timeout);
-      signal?.removeEventListener("abort", abort);
-    }
-  }
-
-  function pokemonSpriteSources(sprites, shiny = false, mode = "artwork") {
-    const key = shiny ? "front_shiny" : "front_default";
-    const other = sprites.other || {};
-    const classic = sprites.versions?.["generation-v"]?.["black-white"];
-    const drawn = uniqueSources(other["official-artwork"]?.[key], other.home?.[key]);
-    const pixels = uniqueSources(sprites[key], classic?.[key]);
-    const animated = uniqueSources(other.showdown?.[key], classic?.animated?.[key]);
-    return mode === "artwork" ? drawn
-      : mode === "animated" ? animatedPokemonSources(sprites, shiny)
-      : uniqueSources(...pixels, ...homeSpriteSources(sprites, shiny).filter(source => !/\.gif(?:[?#]|$)/i.test(source)));
-  }
-
-  async function availablePokemonSprites(raw, species, signal) {
-    // Never borrow the default variety of another Pokemon ID.
-    return raw.sprites || {};
-  }
-
-  function animatedPokemonSources(sprites, shiny = false, identity = "") {
-    const key = shiny ? "front_shiny" : "front_default";
-    const showdown = sprites?.other?.showdown;
-    const classic = sprites?.versions?.["generation-v"]?.["black-white"];
-    const aliases = {
-      "squawkabilly-green-plumage": "squawkabilly", "squawkabilly-blue-plumage": "squawkabilly-blue",
-      "squawkabilly-yellow-plumage": "squawkabilly-yellow", "squawkabilly-white-plumage": "squawkabilly-white",
-      "mr-mime": "mrmime", "mime-jr": "mimejr", "mr-rime": "mrrime"
-    };
-    const name = aliases[identity] || identity;
-    const staticShowdown = name && /^[a-z0-9-]+$/.test(name)
-      ? `https://play.pokemonshowdown.com/sprites/gen5${shiny ? "-shiny" : ""}/${name}.png` : null;
-    return uniqueSources(showdown?.[key], showdown?.static?.[key], staticShowdown,
-      classic?.animated?.[key], classic?.[key], sprites?.[key],
-      ...homeSpriteSources(sprites, shiny).filter(source => !/\.gif(?:[?#]|$)/i.test(source)));
-  }
-
-  function searchMenuSpriteSources(sprites, shiny = false) {
-    const key = shiny ? "front_shiny" : "front_default";
-    const classic = sprites?.versions?.["generation-v"]?.["black-white"];
-    return uniqueSources(classic?.animated?.[key], classic?.[key]);
-  }
-
-  function homeSpriteSources(sprites, shiny = false) {
-    const key = shiny ? "front_shiny" : "front_default";
-    const versions = sprites?.versions || {};
-    const classic = versions["generation-v"]?.["black-white"];
-    const historical = [];
-    const collect = object => {
-      if (!object || typeof object !== "object") return;
-      if (typeof object[key] === "string") historical.push(object[key]);
-      for (const value of Object.values(object)) if (value && typeof value === "object") collect(value);
-    };
-    collect(versions);
-    return uniqueSources(classic?.animated?.[key], classic?.[key], sprites?.[key],
-      versions["generation-iv"]?.platinum?.[key], versions["generation-iii"]?.emerald?.[key],
-      ...historical, sprites?.other?.showdown?.[key]);
-  }
-
-  function mainPokemonSources(raw, shiny = false) {
-    const key = shiny ? "front_shiny" : "front_default";
-    const other = raw.sprites?.other || {};
-    const official = other["official-artwork"]?.[key];
-    // Reject known mismatches and artwork URLs identifying another form/ID.
-    const id = official?.match(/\/(\d+)\.(?:png|webp)(?:[?#]|$)/i)?.[1];
-    const valid = !NON_DRAWN_OFFICIAL_ART.has(`${raw.id}:${shiny ? "shiny" : "normal"}`)
-      && (!id || Number(id) === raw.id)
-      && (!shiny || official !== other["official-artwork"]?.front_default);
-    const home = other.home?.[key];
-    return uniqueSources(valid ? official : null, shiny && home === other.home?.front_default ? null : home);
   }
 
   async function fetchPokemon(query, signal) {
@@ -521,22 +397,6 @@
   }
 
   // Shared elements and sprite geometry
-  function humanize(value) {
-    return value.split("-").map((word) => word.charAt(0).toUpperCase() + word.slice(1)).join(" ");
-  }
-
-  function normalizeQuery(value) {
-    const query = String(value).trim().toLowerCase().normalize("NFD")
-      .replace(/[\u0300-\u036f]/g, "").replace(/♀/g, "-f").replace(/♂/g, "-m")
-      .replace(/[.'’]/g, "").replace(/[\s:]+/g, "-").replace(/^#/, "");
-    return /^\d+$/.test(query) ? String(Number(query)) : query;
-  }
-
-  function matchesPokemonName(name, query) {
-    const normalized = normalizeQuery(name);
-    return normalized.includes(query) || normalized.replace(/-/g, "").includes(query.replace(/-/g, ""));
-  }
-
   function makeElement(tag, className, text) {
     const element = document.createElement(tag);
     if (className) element.className = className;
@@ -833,11 +693,25 @@
     });
   }
 
-  function uniqueSources(...sources) {
-    return [...new Set(sources.filter(Boolean))];
+  function clearImageUnavailable(image) {
+    const placeholder = image.parentElement?.querySelector(":scope > .image-unavailable");
+    placeholder?.remove();
+  }
+
+  function showImageUnavailable(image) {
+    image.hidden = true;
+    image.removeAttribute("src");
+    const parent = image.parentElement;
+    if (!parent) return;
+    clearImageUnavailable(image);
+    const placeholder = makeElement("span", "image-unavailable", "Image not available");
+    placeholder.setAttribute("role", "img");
+    placeholder.setAttribute("aria-label", image.alt ? `${image.alt}: image not available` : "Image not available");
+    image.insertAdjacentElement("afterend", placeholder);
   }
 
   function setImage(image, sources, alt, resolveMissingSources) {
+    clearImageUnavailable(image);
     if (image === elements.battleSprite) {
       const old = fittedSprites.get(image);
       if (old) spriteSpaceObserver.unobserve(old.frame);
@@ -849,12 +723,12 @@
       image.classList.add("is-fitting");
       image.alt = alt;
       const candidates = uniqueSources(...(sources || []));
-      if (!candidates.length) return;
+      if (!candidates.length) { showImageUnavailable(image); return; }
       let index = 0;
-      image.onload = () => { void fitVisibleSprite(image); };
+      image.onload = () => { clearImageUnavailable(image); void fitVisibleSprite(image); };
       image.onerror = () => {
         if (++index < candidates.length) image.src = candidates[index];
-        else { image.hidden = true; image.removeAttribute("src"); }
+        else showImageUnavailable(image);
       };
       image.src = candidates[0];
       return;
@@ -870,12 +744,12 @@
       const candidates = uniqueSources(...(sources || []));
       let index = 0;
       const source = candidates[0];
-      if (!source) return;
       image.alt = alt;
-      image.onload = () => { void fitMainArtwork(); };
+      if (!source) { showImageUnavailable(image); return; }
+      image.onload = () => { clearImageUnavailable(image); void fitMainArtwork(); };
       image.onerror = () => {
         if (++index < candidates.length) image.src = candidates[index];
-        else { image.hidden = true; image.removeAttribute("src"); }
+        else showImageUnavailable(image);
       };
       image.src = source;
       return;
@@ -888,6 +762,7 @@
     let index = 0;
     let resolvedMissing = false;
     image.onload = () => {
+      clearImageUnavailable(image);
       image.style.imageRendering = !/\.svg(?:\?|$)/i.test(image.currentSrc || image.src) &&
         (image.naturalWidth <= 128 && image.naturalHeight <= 128 || /\.gif(?:\?|$)/i.test(image.currentSrc || image.src)) ? "pixelated" : "auto";
       if (image === elements.pokemonArt) void fitMainArtwork();
@@ -912,8 +787,7 @@
         image.src = candidates[++index];
       } else {
         image.onerror = null;
-        image.hidden = true;
-        image.removeAttribute("src");
+        showImageUnavailable(image);
       }
     };
     image.onerror = onError;
@@ -926,14 +800,14 @@
       for (const property of ["width", "height", "left", "top"]) image.style.removeProperty(property);
     }
     if (candidates.length) image.src = candidates[0];
-    else {
+    else if (resolveMissingSources) {
       image.removeAttribute("src");
-      if (resolveMissingSources) {
-        void Promise.resolve().then(resolveMissingSources).then(extra => {
-          if (image.onerror === onError && extra?.length) setImage(image, extra, alt);
-        }).catch(() => {});
-      }
-    }
+      void Promise.resolve().then(resolveMissingSources).then(extra => {
+        if (image.onerror !== onError) return;
+        if (extra?.length) setImage(image, extra, alt);
+        else showImageUnavailable(image);
+      }).catch(() => { if (image.onerror === onError) showImageUnavailable(image); });
+    } else showImageUnavailable(image);
   }
 
   function placeVisibleSprite(image, bounds, box) {
@@ -1602,7 +1476,6 @@
       if (sequence !== captureSequence) return;
       capturedVariants.delete(variantKey);
       capturedPokemon.delete(variantKey);
-      if (variantKey.endsWith(":shiny")) albumShinySelection.delete(state.currentPokemon.id);
       saveCaptures();
       renderAlbum();
       elements.captureStatus.textContent = `${state.isShiny ? "Shiny" : "Base"} Pokémon released.`;
@@ -2331,6 +2204,7 @@
       shinyButton.setAttribute("aria-pressed", String(shiny));
       shinyButton.setAttribute("aria-label", shinyButton.disabled ? "Shiny version of " + pokemon.name : "Show " + (shiny ? "Base" : "Shiny") + " version of " + pokemon.name);
       shinyButton.title = shinyButton.disabled ? "Capture both variants to switch" : "Show " + (shiny ? "Base" : "Shiny") + " version";
+      clearImageUnavailable(sprite);
       sprite.hidden = true;
       let source = owned ? null : await albumStaticSprite(pokemon.id, false);
       if (owned) {
@@ -2339,9 +2213,11 @@
           if (ticket !== sequence || !card.isConnected) return;
         }
       }
-      if (!source || !card.isConnected || ticket !== sequence) return;
+      if (!card.isConnected || ticket !== sequence) return;
       sprite.alt = pokemon.name + ", " + (shiny ? "Shiny" : "Base");
+      if (!source) { showImageUnavailable(sprite); return; }
       sprite.onload = async () => {
+        clearImageUnavailable(sprite);
         const [current, base, shinyBounds] = await Promise.all([
           measureArtwork(source, true),
           owned && hasNormal && hasShiny ? measureArtwork(battleSources[0][0], true) : null,
@@ -2356,7 +2232,7 @@
         sprite.hidden = false; layoutFittedSprite(sprite, bounds);
       };
       sprite.onerror = () => {
-        if (ticket === sequence) { sprite.hidden = true; sprite.removeAttribute("src"); }
+        if (ticket === sequence) showImageUnavailable(sprite);
       };
       sprite.src = source;
     };
@@ -2543,15 +2419,6 @@
     return true;
   }
 
-  function chooseAlbumGrid(width, height, gapX, gapY) {
-    // Pick columns before rows so narrow pages show readable, full-size cards.
-    const columns = Math.max(1, Math.min(4, Math.floor((width + gapX) / (240 + gapX))));
-    const gaps = columns - 1 + (columns % 2 === 0 ? 1 : 0);
-    const widthPerCard = (width - gaps * gapX) / columns;
-    const rows = Math.max(1, Math.floor((height + gapY) / (widthPerCard / ALBUM_CARD_RATIO + gapY)));
-    return { columns, rows, cardWidth: Math.max(1, Math.min(widthPerCard, (height - gapY * (rows - 1)) / rows * ALBUM_CARD_RATIO)) };
-  }
-
   function layoutAlbumSlots() {
     const grid = elements.albumGrid;
     const columns = Number(grid.style.getPropertyValue("--album-columns")) || 4;
@@ -2561,12 +2428,6 @@
       card.style.gridColumn = String(column + 1 + (book && column >= columns / 2 ? 1 : 0));
       card.style.gridRow = String(Math.floor(index / columns) + 1);
     });
-  }
-
-  function albumDeviceLayout(stageWidth, stageHeight) {
-    const scale = Math.max(0, stageHeight - 24) / 746;
-    const width = 420 * scale;
-    return { scale, width, embedded: stageWidth < width + 520 + 38 };
   }
 
   function isAlbumEmbedded() {
@@ -2800,27 +2661,16 @@
   // Species, not forms, are the unit of every collection metric.
   function collectionProgress() {
     if (!state.albumCatalogueReady || !progressState.species || !albumFilterIndex.data) return null;
-    const catalogIds = new Set(state.albumCatalogue.map(entry => entry.id));
-    const query = normalizeQuery(state.albumQuery);
-    const numeric = /^\d+$/.test(query);
-    const matchingIds = state.albumCatalogue.filter(({ id, name }) => {
-      const metadata = albumFilterIndex.data.get(id);
-      return metadata && (state.albumFilter === "all" || metadata.types.includes(state.albumFilter))
-        && (state.albumGeneration === "all" || metadata.generation === state.albumGeneration)
-        && (state.albumCategory === "all" || metadata.category === state.albumCategory)
-        && (!query || (numeric ? String(id).startsWith(query) : matchesPokemonName(name, query)));
-    }).map(({ id }) => id);
-    const speciesIds = new Set(matchingIds.map(id => albumFilterIndex.data.get(id)?.speciesId).filter(Number.isInteger));
-    // An incomplete index must not silently produce an inflated percentage.
-    if ([...catalogIds].some(id => !albumFilterIndex.data.has(id))) return null;
-    const normal = new Set(), shiny = new Set();
-    for (const {pokemon, shiny: isShiny} of capturedPokemon.values()) {
-      const id = albumFilterIndex.data.get(pokemon.id)?.speciesId || pokemon.speciesId;
-      if (speciesIds.has(id)) (isShiny ? shiny : normal).add(id);
-    }
-    const owned = new Set(state.albumVariant === "normal" ? normal : state.albumVariant === "shiny" ? shiny : [...normal, ...shiny]);
-    const both = new Set([...normal].filter(id => shiny.has(id)));
-    return { speciesIds, owned, normal, shiny, both, total:speciesIds.size };
+    return calculateCollectionProgress({
+      catalogue: state.albumCatalogue,
+      filterIndex: albumFilterIndex.data,
+      captures: capturedPokemon,
+      albumFilter: state.albumFilter,
+      albumGeneration: state.albumGeneration,
+      albumCategory: state.albumCategory,
+      albumVariant: state.albumVariant,
+      albumQuery: state.albumQuery,
+    });
   }
 
   function updateAlbumProgress() {
@@ -3388,7 +3238,10 @@
       const mystery = makeElement("div", "album-profile-cover-mark", "?");
       mystery.setAttribute("aria-hidden", "true");
       const coverCaption = makeElement("span", "album-profile-cover-caption");
-      cover.append(coverBrand, mystery, coverCaption);
+      const coverReturn = makeElement("button", "album-profile-cover-return");
+      coverReturn.type = "button";
+      coverReturn.hidden = true;
+      cover.append(coverBrand, mystery, coverCaption, coverReturn);
       hero.append(cover);
       const cardHeader = makeElement("header", "album-card-titlebar");
       const cardIdentity = makeElement("div");
@@ -3449,15 +3302,58 @@
         hero.classList.toggle("is-uncollected", missingVariant);
         cover.hidden = !missingVariant;
         coverCaption.textContent = `${shiny ? "Shiny" : "Base"} · Not captured`;
+        const alternateVariant = capturedAlternateVariant(pokemon.id, shiny, capturedVariants);
+        coverReturn.hidden = !missingVariant || !alternateVariant;
+        coverReturn.disabled = !missingVariant || !alternateVariant;
+        coverReturn.textContent = alternateVariant?.label || "";
+        coverReturn.setAttribute("aria-label", alternateVariant
+          ? `${alternateVariant.label} for ${pokemon.name}` : "Return to captured variant");
         cardHeader.setAttribute("aria-hidden", String(missingVariant));
+        cardDetails.setAttribute("aria-hidden", String(missingVariant));
+        cardDetails.inert = missingVariant;
+        footer.setAttribute("aria-hidden", String(missingVariant));
+        cryButton.hidden = missingVariant;
+        cryButton.disabled = missingVariant || !pokemon.cries.length;
         alignCardBackdrop();
         variantLabel.textContent = `#${String(pokemon.id).padStart(3, "0")} · ${shiny ? "Shiny" : "Base"}`;
+        variantLabel.setAttribute("aria-hidden", String(missingVariant));
+        shinyButton.hidden = missingVariant;
+        shinyButton.inert = missingVariant;
+        shinyButton.disabled = missingVariant || !pokemon.battleShinyImages.length;
         shinyButton.setAttribute("aria-label", shiny ? "Show base variant" : "Show shiny variant");
         shinyButton.setAttribute("aria-pressed", String(shiny));
         shinyButton.title = shiny ? "Show base variant" : "Show shiny variant";
         spriteVariantSources.set(artwork, [pokemon.battleImages, pokemon.battleShinyImages]);
-        setImage(artwork, loadedSource ? [loadedSource] : shiny ? pokemon.battleShinyImages : pokemon.battleImages, `${shiny ? "Shiny " : ""}${pokemon.name}`);
+        setImage(artwork, loadedSource ? [loadedSource] : shiny ? pokemon.battleShinyImages : pokemon.battleImages,
+          missingVariant ? "" : `${shiny ? "Shiny " : ""}${pokemon.name}`);
       };
+      coverReturn.addEventListener("click", async () => {
+        const alternateVariant = capturedAlternateVariant(pokemon.id, shiny, capturedVariants);
+        if (!alternateVariant) return;
+        coverReturn.disabled = true;
+        coverReturn.setAttribute("aria-busy", "true");
+        let source;
+        try {
+          const candidates = alternateVariant.shiny ? pokemon.battleShinyImages : pokemon.battleImages;
+          for (const candidate of candidates) {
+            try { source = await preloadImage(candidate, controller.signal); break; }
+            catch { controller.signal.throwIfAborted(); }
+          }
+          if (controller.signal.aborted || !hero.isConnected) return;
+          shiny = alternateVariant.shiny;
+          updateVariant(source);
+          requestAnimationFrame(() => {
+            if (!shinyButton.hidden && !shinyButton.disabled) shinyButton.focus({ preventScroll: true });
+            else elements.albumDetailClose.focus({ preventScroll: true });
+          });
+        } catch {
+          if (!controller.signal.aborted) coverReturn.title = "Could not open the captured variant. Try again.";
+        } finally {
+          coverReturn.removeAttribute("aria-busy");
+          const nextAlternate = capturedAlternateVariant(pokemon.id, shiny, capturedVariants);
+          coverReturn.disabled = hero.classList.contains("is-uncollected") && !nextAlternate;
+        }
+      });
       shinyButton.disabled = !pokemon.battleShinyImages.length;
       shinyButton.addEventListener("click", async () => {
         shinyButton.disabled = true;
@@ -3544,11 +3440,10 @@
           cleanup();
           controller.signal.removeEventListener("abort", cleanup);
           reducedMotion.removeEventListener("change", onMotionChange);
-          shinyButton.disabled = !pokemon.battleShinyImages.length;
+          shinyButton.disabled = hero.classList.contains("is-uncollected") || !pokemon.battleShinyImages.length;
           shinyButton.removeAttribute("aria-busy");
         }
       });
-      updateVariant(preparedProfileSprite?.source);
       const cryButton = makeElement("button", "album-profile-cry");
       cryButton.type = "button";
       cryButton.innerHTML = '<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 9h4l5-4v14l-5-4H4z"/><path d="M16 8c3 2 3 6 0 8m3-11c5 4 5 10 0 14"/></svg>';
@@ -3599,13 +3494,18 @@
       detailTop.append(types, cardActions);
       cardDetails.append(detailTop, cryStatus, makeElement("p", "album-detail-species", `${pokemon.species} · ${metricFormatter.format(pokemon.height)} m · ${metricFormatter.format(pokemon.weight)} kg`));
       const ability = makeElement("div", "album-card-ability");
-      ability.append(makeElement("span", "", "ABILITY"), makeElement("strong", "", pokemon.abilities.join(" / ") || "Unknown"));
+      const abilityText = pokemon.abilities.join(" / ") || "Unknown";
+      const abilityValue = makeElement("strong", "", abilityText);
+      abilityValue.title = abilityText;
+      ability.append(makeElement("span", "", "ABILITY"), abilityValue);
       cardDetails.append(ability);
       const featuredMoves = makeElement("div", "album-card-moves");
       featuredMoves.append(makeElement("small", "", "LEARNED MOVES"));
       pokemon.moves.slice(0, 2).forEach((move) => {
         const row = makeElement("div");
-        row.append(makeElement("span", "album-card-move-mark", "✧"), makeElement("strong", "", move));
+        const moveName = makeElement("strong", "", move);
+        moveName.title = move;
+        row.append(makeElement("span", "album-card-move-mark", "✧"), moveName);
         featuredMoves.append(row);
       });
       if (pokemon.moves.length) cardDetails.append(featuredMoves);
@@ -3614,6 +3514,7 @@
       const cardLower = makeElement("div", "album-card-lower");
       cardLower.append(cardDetails, footer);
       hero.append(cardLower);
+      updateVariant(preparedProfileSprite?.source);
       const info = makeElement("section", "album-detail-info");
       const overview = makeElement("section", "album-profile-page");
       overview.append(makeElement("span", "album-detail-kicker", "POKÉMON RESEARCH"), makeElement("h3", "album-journal-title", "Species journal"),
@@ -3934,12 +3835,20 @@
   };
   const railObserver = new MutationObserver(syncRails);
   railObserver.observe(elements.pokedex, { attributes: true, attributeFilter: ["class"] });
-  function deviceOpeningFit(baseWidth, shellHeight, baseOpening, availableWidth, availableHeight) {
-    const opening = baseOpening;
-    const scale = Math.min(1, Math.max(0, availableHeight) / (shellHeight * 2 + opening),
-      Math.max(0, availableWidth) / baseWidth);
-    return { scale, opening };
-  }
+  const syncSideTriggerPlacement = (scale) => {
+    const stageRect = deviceStage.getBoundingClientRect();
+    const deviceRect = elements.pokedex.getBoundingClientRect();
+    const outside = sideTriggersFitOutside({
+      stageLeft: stageRect.left,
+      stageRight: stageRect.right,
+      viewportWidth: window.innerWidth,
+      deviceLeft: deviceRect.left,
+      deviceRight: deviceRect.right,
+      triggerWidth: 34 * scale,
+      margin: 10,
+    });
+    elements.pokedex.classList.toggle("side-triggers-inside", !outside);
+  };
   const fitDeviceToStage = () => {
     syncAlbumFilterPlacement();
     const stageStyle = getComputedStyle(deviceStage);
@@ -3949,7 +3858,11 @@
     const availableWidth = deviceStage.clientWidth
       - parseFloat(stageStyle.paddingLeft) - parseFloat(stageStyle.paddingRight);
     const embedded = isAlbumEmbedded();
-    elements.pokedex.classList.remove("interface-only");
+    // Never visually hide, inert or aria-hide a subtree while it still owns
+    // keyboard focus. Move focus to the visible Album surface first.
+    if (embedded && elements.pokedex.contains(document.activeElement)) {
+      (elements.albumDetail.hidden ? elements.albumGrid : elements.albumDetailClose).focus({ preventScroll: true });
+    }
     deviceStage.classList.toggle("album-embedded", embedded);
     elements.pokedex.inert = embedded;
     elements.pokedex.setAttribute("aria-hidden", String(embedded));
@@ -3966,6 +3879,7 @@
     for (const [property, value] of [["--device-scale", String(scale)], ["--screen-open-height", `${opening}px`]]) {
       if (elements.pokedex.style.getPropertyValue(property) !== value) elements.pokedex.style.setProperty(property, value);
     }
+    syncSideTriggerPlacement(scale);
     if (state.albumOpen) requestAnimationFrame(layoutAlbum);
     syncRails();
   };
@@ -4020,4 +3934,6 @@
   renderAlbum();
   fitDeviceToStage();
   loadPokemonNames();
-})();
+
+  return runtimeRecord.dispose;
+}

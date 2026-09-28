@@ -997,9 +997,6 @@ h2 {
   bottom: calc(var(--home-cap-rise) - var(--screen-overlap) + var(--main-content-inset));
 }
 
-.pokemon-state > .shiny-toggle { right: var(--main-content-inset); }
-.pokemon-state > .capture-toggle { left: var(--main-content-inset); }
-
 .shiny-toggle {
   position: absolute;
   z-index: var(--layer-controls);
@@ -1076,8 +1073,6 @@ h2 {
   width: var(--screen-control-size);
   height: var(--screen-control-size);
   flex-shrink: 0;
-  display: grid;
-  place-items: center;
   line-height: 1;
   padding: 0;
   border: 2px solid rgba(255,255,255,.92);
@@ -1168,7 +1163,7 @@ h2 {
   box-shadow: 0 5px 12px rgba(24,35,42,.25), inset 0 1px rgba(255,255,255,.18);
   cursor: pointer;
   text-align: center;
-  transition: transform var(--motion-scene) var(--ease-standard), opacity var(--motion-control) var(--ease-standard), background var(--motion-control) var(--ease-standard);
+  transition: transform var(--motion-scene) var(--ease-standard), opacity var(--motion-control) var(--ease-standard), background var(--motion-control) var(--ease-standard), left var(--motion-control) var(--ease-standard), right var(--motion-control) var(--ease-standard);
 }
 
 .side-trigger-info {
@@ -1179,6 +1174,18 @@ h2 {
 .side-trigger-stats {
   right: -34px;
   border-radius: 3px 12px 12px 3px;
+}
+
+/* Runtime moves both side controls inside only when the scaled device does not
+   have enough real viewport space to keep them outside with a safety margin. */
+.pokedex.side-triggers-inside .side-trigger-info {
+  left: 5px;
+  border-radius: 4px 11px 11px 4px;
+}
+
+.pokedex.side-triggers-inside .side-trigger-stats {
+  right: 5px;
+  border-radius: 11px 4px 4px 11px;
 }
 
 .side-trigger strong {
@@ -1244,10 +1251,6 @@ img[data-sprite-fitting] {
   width: min(620px,calc(100vw - 24px));
   max-height: calc(100dvh - 24px);
   padding: 0;
-  border: 1px solid var(--control-border);
-  border-radius: var(--radius-panel);
-  background: var(--display-field);
-  color: var(--ink);
   box-shadow: var(--shadow-panel);
   overflow: hidden;
 }
@@ -1262,12 +1265,6 @@ img[data-sprite-fitting] {
   justify-content: space-between;
   align-items: center;
   gap: 12px;
-  padding: var(--space-4);
-  border-bottom: 1px solid #a4ccd677;
-}
-
-.progress-heading h2 {
-  margin: 4px 0 0;
 }
 
 .progress-heading button {
@@ -1278,8 +1275,6 @@ img[data-sprite-fitting] {
 
 .progress-tabs {
   display: flex;
-  gap: 4px;
-  padding: 8px 12px;
 }
 
 .progress-tabs button {
@@ -1290,11 +1285,6 @@ img[data-sprite-fitting] {
   font-size: .72rem;
   background: transparent;
   box-shadow: none;
-}
-
-.progress-tabs button[aria-pressed="true"] {
-  background: var(--surface);
-  box-shadow: var(--shadow-control);
 }
 
 .progress-content {
@@ -1658,8 +1648,6 @@ img[data-sprite-fitting] {
   position: absolute;
   z-index: 4;
   top: var(--main-content-inset);
-  left: var(--main-content-inset);
-  right: var(--main-content-inset);
   display: flex;
   align-items: flex-start;
   justify-content: space-between;
@@ -1869,10 +1857,6 @@ img[data-sprite-fitting] {
   height: 42px;
   pointer-events: none;
   filter: drop-shadow(0 6px 5px rgba(24,48,59,.25));
-}
-
-.capture-ball[hidden] {
-  display: none;
 }
 
 #albumMobileFilterDone {
@@ -2224,6 +2208,31 @@ img[data-sprite-fitting] {
   min-height: 72px;
 }
 
+.image-unavailable {
+  position: absolute;
+  z-index: 4;
+  inset: 0;
+  display: grid;
+  place-items: center;
+  padding: 10px;
+  color: #62808e;
+  font-size: .7rem;
+  font-weight: 800;
+  line-height: 1.25;
+  text-align: center;
+  pointer-events: none;
+}
+
+.album-sprite-frame .image-unavailable {
+  padding: 22% 12%;
+  font-size: calc(.68rem * var(--album-card-scale, 1));
+}
+
+.album-profile-stage .image-unavailable,
+.album-related-art .image-unavailable {
+  font-size: clamp(.62rem, 2.4cqw, .82rem);
+}
+
 .stats-list {
   display: grid;
   flex: 0 0 auto;
@@ -2494,12 +2503,9 @@ img[data-sprite-fitting] {
     border-color 2.2s var(--ease-standard), transform var(--motion-micro) var(--ease-standard),
     opacity var(--motion-control) var(--ease-standard), visibility var(--motion-control);
 }
-.pokedex.home-active .album-toggle:focus-visible  {
+.pokedex.home-active .album-toggle:focus-visible {
   box-shadow: 0 0 0 3px color-mix(in srgb, var(--home-search-type, #43b1cf) 28%, transparent),
     0 5px 14px rgba(28,74,87,.18);
-}
-
-.pokedex.home-active .album-toggle:focus-visible {
   outline-color: color-mix(in srgb, var(--home-search-type, #43b1cf) 65%, #17384e);
 }
 
@@ -2609,7 +2615,6 @@ img[data-sprite-fitting] {
   min-width: 0;
   min-height: 0;
   display: grid;
-  grid-template-rows: auto auto minmax(0,1fr) auto;
   overflow: hidden;
   opacity: 0;
   transform: translateX(26px) scale(.985);
@@ -3057,7 +3062,6 @@ img[data-sprite-fitting] {
   min-height: 0;
   aspect-ratio: 4 / 3;
   border: calc(1px * var(--album-card-scale, 1)) solid #ffffff65;
-  border-radius: 14px;
   background: #dcf8fb55;
   pointer-events: none;
 }
@@ -3227,10 +3231,7 @@ img[data-sprite-fitting] {
   align-items: center;
   justify-content: space-between;
   flex: 0 0 auto;
-  gap: 12px;
-  padding: 14px 18px;
   border-bottom: 1px solid #b1d3dd;
-  background: linear-gradient(120deg,#f8ffff,#d3eef5);
 }
 
 .album-detail-kicker {
@@ -3367,21 +3368,12 @@ img[data-sprite-fitting] {
 }
 
 .album-research {
-  margin-top: 22px;
-  padding-top: 18px;
   border-top: 1px solid #bedae2;
-}
-
-.album-research-metric {
-  margin-top: 18px;
 }
 
 .album-research-metric > div {
   display: flex;
   justify-content: space-between;
-  gap: 8px;
-  font-size: .7rem;
-  margin-bottom: 7px;
 }
 
 .album-research-metric meter {
@@ -3434,8 +3426,6 @@ img[data-sprite-fitting] {
   display: flex;
   gap: 4px;
   flex: 0 0 auto;
-  padding: 7px;
-  background: var(--surface-muted);
   border-bottom: 1px solid #bddbe4;
 }
 
@@ -3449,43 +3439,31 @@ img[data-sprite-fitting] {
 .album-profile-pages {
   min-height: 0;
   flex: 1;
-  padding: 20px;
-  overflow-y: auto;
   scrollbar-width: thin;
   overscroll-behavior: contain;
 }
 
 .album-detail-description {
-  margin: 9px 0 20px;
   font-size: .85rem;
-  line-height: 1.55;
   color: #234a5e;
 }
 
 .album-detail-facts {
   display: grid;
   grid-template-columns: repeat(2,minmax(0,1fr));
-  gap: 10px;
   margin: 0;
 }
 
 .album-detail-facts > div {
   min-width: 0;
-  padding: 10px;
-  border: 1px solid #d0e4eb;
-  border-radius: var(--radius-control);
-  background: #ffffffa6;
 }
 
 .album-detail-facts dt {
   color: #62808e;
-  font-size: .63rem;
-  margin-bottom: 4px;
 }
 
 .album-detail-facts dd {
   margin: 0;
-  font-size: .76rem;
   font-weight: 800;
   overflow-wrap: anywhere;
 }
@@ -3806,7 +3784,6 @@ img[data-sprite-fitting] {
 
 .album-detail-hero.is-shiny .album-detail-id {
   background: #6a4a1bd9;
-  color: #fff6cb;
 }
 
 .album-card-footer > span:last-child {
@@ -4011,16 +3988,12 @@ img[data-sprite-fitting] {
   min-width: 0;
   max-height: 100%;
   border: 1px solid #b4d8e2;
-  border-radius: var(--radius-panel);
-  background: #f7fdffcf;
   overflow: hidden;
-  box-shadow: 0 4px 14px #21495a0a;
   transition: opacity var(--motion-control) var(--ease-standard),border-color var(--motion-panel) var(--ease-standard),box-shadow var(--motion-panel) var(--ease-standard);
   min-height: 0;
 }
 
 .album-detail-body {
-  --profile-gap: var(--space-6);
   flex: 1;
   display: grid;
   grid-template-columns: minmax(0,min(410px,44%,max(260px,calc((100cqh - 138px) * 63 / 88)))) minmax(0,1fr);
@@ -4173,7 +4146,6 @@ img[data-sprite-fitting] {
 .gym-option {
   position: relative;
   width: 100%;
-  display: flex;
   align-items: center;
   gap: var(--screen-content-inset);
   padding: var(--screen-content-inset);
@@ -4243,7 +4215,6 @@ img[data-sprite-fitting] {
 }
 
 .gym-option-chevron {
-  margin-left: auto;
   color: #62808e;
   font-size: 1.6rem;
   line-height: 1;
@@ -4315,7 +4286,6 @@ img[data-sprite-fitting] {
   flex: 0 0 auto;
   color: #234a5e;
   text-align: center;
-  gap: var(--screen-content-inset);
   width: 100%;
   padding-inline: 0;
 }
@@ -4331,13 +4301,11 @@ img[data-sprite-fitting] {
   width: 100%;
   flex: 1;
   min-height: 0;
-  gap: 8px;
 }
 
 .album-filter-menu {
   display: grid;
   grid-template-columns: repeat(2,minmax(0,1fr));
-  gap: 8px;
   flex: 1;
   min-height: 0;
   grid-template-rows: repeat(2,minmax(0,1fr));
@@ -4348,18 +4316,15 @@ img[data-sprite-fitting] {
   display: grid;
   justify-items: center;
   align-content: center;
-  gap: var(--screen-content-inset);
   min-width: 0;
   cursor: pointer;
   transition: translate var(--motion-control) var(--ease-standard), background var(--motion-control), border-color var(--motion-control);
   min-height: 0;
-  padding: var(--screen-content-inset);
   border-radius: 14px;
   background: #f1fbfd;
   border: 1px solid #b9d9e2;
   box-shadow: none;
   color: #234a5e;
-  text-align: center;
 }
 
 .album-filter-tile > img {
@@ -4369,10 +4334,7 @@ img[data-sprite-fitting] {
 }
 
 .album-filter-tile strong {
-  font-size: 1.125rem;
   font-weight: 900;
-  line-height: 1.2;
-  overflow-wrap: anywhere;
   margin: 0;
   letter-spacing: -.02em;
 }
@@ -4437,7 +4399,6 @@ img[data-sprite-fitting] {
   display: flex;
   flex-direction: column;
   align-items: center;
-  justify-content: center;
   gap: var(--screen-content-inset);
   padding: var(--screen-content-inset);
   min-width: 0;
@@ -4473,17 +4434,12 @@ img[data-sprite-fitting] {
   border-radius: 50%;
   background: var(--filter-option-color, #587eb5);
   color: #fff;
-  box-shadow: 0 2px 6px rgba(40,115,137,.08);
   transition: translate var(--motion-control) var(--ease-standard), background-color var(--motion-control) var(--ease-standard), box-shadow var(--motion-control) var(--ease-standard);
 }
 
 .album-filter-options:is([data-view="generation"], [data-view="category"], [data-view="variant"]) :is(.album-generation-mark, .album-category-mark, .album-variant-mark) {
-  position: absolute;
-  inset: 0;
   display: grid;
   place-items: center;
-  width: auto;
-  height: auto;
   min-width: 0;
   margin: 0;
   padding: 0;
@@ -4491,11 +4447,6 @@ img[data-sprite-fitting] {
   border-radius: inherit;
   background: transparent;
   color: inherit;
-  font-size: 1.5rem;
-  font-weight: 800;
-  line-height: 1;
-  letter-spacing: 0;
-  text-align: center;
   white-space: nowrap;
   overflow-wrap: normal;
   word-break: normal;
@@ -4552,7 +4503,6 @@ img[data-sprite-fitting] {
   display: flex;
   flex-direction: column;
   align-items: center;
-  gap: var(--screen-content-inset);
   flex-shrink: 0;
   width: 100%;
 }
@@ -4878,7 +4828,6 @@ img[data-sprite-fitting] {
 
 .album-command-heading > span {
   display: block;
-  font-size: .57rem;
   font-weight: 900;
   letter-spacing: .12em;
   color: #62808e;
@@ -4886,10 +4835,7 @@ img[data-sprite-fitting] {
 
 .album-command-heading > strong {
   display: block;
-  margin: 4px 0;
-  font-size: 1.14rem;
   font-weight: 900;
-  line-height: 1.15;
   overflow-wrap: anywhere;
 }
 
@@ -5502,15 +5448,6 @@ from { transform:rotate(0deg); }
     transform: scaleX(-1);
   }
 
-  .side-trigger-info {
-    left: 5px;
-    border-radius: 4px 11px 11px 4px;
-  }
-
-  .side-trigger-stats {
-    right: 5px;
-    border-radius: 11px 4px 4px 11px;
-  }
 
   .pokedex.drawer-info-open .side-trigger-info,
   .pokedex.drawer-stats-open .side-trigger-stats {
@@ -5890,15 +5827,10 @@ from { transform:rotate(0deg); }
 }
 .album-panel > .album-panel-heading {
   display: grid;
-  grid-template-columns: 1fr;
   min-height: 56px;
   padding: var(--album-content-inset) var(--album-content-inset) 16px;
   border: 0;
   background: transparent;
-}
-.album-panel > .album-panel-heading .album-heading-identity {
-  justify-content: center;
-  text-align: center;
 }
 .album-panel > .album-panel-heading h2 {
   margin: 0;
@@ -5993,9 +5925,6 @@ from { transform:rotate(0deg); }
 .album-card-clean.is-shiny .album-card-heading strong {
   color: #4d3606;
 }
-.album-card-clean.is-shiny .album-card-heading div > span {
-  color: #907944;
-}
 .album-card-clean .album-sprite-frame {
   position: absolute;
   inset: 0;
@@ -6006,7 +5935,7 @@ from { transform:rotate(0deg); }
   image-rendering: pixelated;
   filter: none;
 }
-.album-card-clean.is-missing { filter: none; opacity: 1; }
+.album-card-clean.is-missing { opacity: 1; }
 .album-card-clean.is-missing > :is(.album-card-heading, .album-card-open) { opacity: .8; }
 .album-card-clean.is-missing .album-sprite-frame img { filter: grayscale(1); opacity: .72; }
 .album-card-clean > .album-card-open {
@@ -6237,9 +6166,6 @@ from { transform:rotate(0deg); }
 .album-panel > .album-panel-heading .album-progress-strip {
   grid-column: 2;
   grid-row: 1 / 3;
-  display: flex;
-  align-items: center;
-  gap: 12px;
   width: 100%;
   min-width: 0;
   margin-top: 0;
@@ -6382,58 +6308,15 @@ from { transform:rotate(0deg); }
   border-radius: calc(14px * var(--album-card-scale, 1));
 }
 .album-card.album-card-clean.is-missing {
+  --pending-rgb: 111, 119, 134;
   border: 0;
   box-shadow: none;
   opacity: 1;
   background: linear-gradient(150deg, #f0f2f5, #dce0e6);
 }
-.album-card.album-card-clean.is-missing { --pending-rgb: 111, 119, 134; }
 .album-card-clean.is-missing::before, .album-card-clean.is-missing::after { background: rgba(var(--pending-rgb), .13); }
 .album-card-clean.is-missing .album-card-heading strong { color: #79818d; }
-.album-card-clean.is-missing .album-card-heading div > span { color: #949ca8; }
 .album-card-clean.is-missing .album-variant { color: #858d98; background: #e3e7ec; }
-
-/* On cramped screens, present the active interface without the physical shell. */
-.pokedex.interface-only {
-  --device-width: var(--interface-width, 360px);
-  --shell-height: 0px;
-  --screen-overlap: 0px;
-  --screen-visible-side-inset: 0px;
-  --screen-closed-height: 0px;
-  --dome-width: 0px;
-  --dome-height: 0px;
-  --home-cap-rise: 0px;
-  --blue-panel-width: var(--device-width);
-  --drawer-width: var(--device-width);
-  --screen-open-top: 0px;
-  --device-slot-height: var(--screen-open-height);
-  filter: none;
-}
-.pokedex.interface-only :is(.shell-half, .screen-edge, .closed-core) { display: none; }
-.pokedex.interface-only .screen-spine::before,
-.pokedex.interface-only .screen-spine::after { display: none; }
-.pokedex.interface-only .screen-spine {
-  inset: 0;
-  height: 100%;
-  transform: none;
-}
-.pokedex.interface-only .screen-surface {
-  inset: 0;
-  clip-path: none;
-  border: 1px solid #b4dce5;
-  border-radius: 18px;
-  overflow: hidden;
-}
-.pokedex.interface-only .screen-interface { inset: 0; }
-.pokedex.interface-only .side-drawer {
-  top: 0;
-  left: 0;
-  right: 0;
-  width: 100%;
-  height: 100%;
-  border-radius: 18px;
-}
-.pokedex.interface-only:is(.drawer-info-open, .drawer-stats-open) .side-drawer { transform: none; }
 
 /* Keep the central controls' horizontal and vertical insets equal. */
 .pokemon-heading {
@@ -6703,6 +6586,13 @@ from { transform:rotate(0deg); }
 .album-detail-hero .album-card-moves > small { font-size: 2.3cqw; }
 .album-detail-hero .album-card-moves > div { margin: 0; gap: var(--profile-spacing); }
 .album-detail-hero .album-card-moves strong { font-size: 3.3cqw; line-height: 1.2; }
+.album-detail-hero .album-card-ability strong,
+.album-detail-hero .album-card-moves strong {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
 .album-detail-hero .album-card-move-mark { width: 1cqw; height: 1cqw; }
 .album-detail-hero .album-card-footer {
   margin: 0;
@@ -7019,21 +6909,15 @@ from { transform:rotate(0deg); }
 /* Keep the page label inside a reserved area of the total-progress square. */
 .album-progress-stat { position: relative; order: 2; flex: 0 0 88px; width: 88px; height: 88px; }
 .album-panel > .album-panel-heading .album-progress-stat button.progress-toggle {
-  padding: 4px 4px 22px;
-  border-radius: 14px;
   font-weight: 900;
 }
 .album-panel > .album-panel-heading .album-progress-stat .album-page-indicator {
   --page-font-size: 10px;
-  position: absolute;
   inset: auto 6px 6px;
-  width: auto;
-  padding: 3px 2px;
   border: 1px solid #ffffff80;
   border-radius: 7px;
   background: #ffffffd9;
   color: #285d72;
-  font-size: 10px;
   font-weight: 900;
   line-height: 1.2;
   white-space: nowrap;
@@ -7041,29 +6925,18 @@ from { transform:rotate(0deg); }
   pointer-events: none;
 }
 .album-panel > .album-panel-heading .album-progress-bars {
-  height: 88px;
-  padding: 7px 12px;
-  gap: 8px;
-  border: 1px solid #ffffff80;
   border-radius: 14px;
-  background: #effcfd80;
-  box-shadow: inset 0 1px 0 #ffffff80;
 }
 .album-panel > .album-panel-heading .album-progress-row {
-  grid-template-rows: 14px 14px;
-  row-gap: 4px;
   font-size: 11px;
 }
 .album-panel > .album-panel-heading .album-progress-row > span { color: #285d72; font-weight: 800; }
-.album-panel > .album-panel-heading .album-progress-row progress { height: 14px; background: #d5eaf0; }
-.album-panel > .album-panel-heading .album-progress-row progress::-webkit-progress-bar { background: #d5eaf0; }
 .album-panel > .album-panel-heading .album-progress-row progress::-webkit-progress-value { background: linear-gradient(90deg, var(--bar-color), color-mix(in srgb, var(--bar-color) 75%, white)); }
 .album-panel > .album-panel-heading .album-progress-row progress::-moz-progress-bar { background: linear-gradient(90deg, var(--bar-color), color-mix(in srgb, var(--bar-color) 75%, white)); }
 @media (max-width: 600px) {
   .album-progress-stat { flex-basis: 72px; width: 72px; height: 72px; }
-  .album-panel > .album-panel-heading .album-progress-bars { height: 72px; padding: 5px 8px; gap: 6px; }
-  .album-panel > .album-panel-heading .album-progress-row { grid-template-rows: 12px 12px; row-gap: 2px; font-size: 10px; }
-  .album-panel > .album-panel-heading .album-progress-row progress { height: 12px; }
+  .album-panel > .album-panel-heading .album-progress-bars { padding: 5px 8px; }
+  .album-panel > .album-panel-heading .album-progress-row { font-size: 10px; }
   .album-panel > .album-panel-heading .album-progress-stat .album-page-indicator { inset: auto 4px 4px; font-size: 9px; }
 }
 
@@ -7072,7 +6945,6 @@ from { transform:rotate(0deg); }
 .album-panel > .album-panel-heading .album-progress-strip {
   display: grid;
   grid-template-columns: minmax(0,1fr) auto;
-  grid-template-rows: auto auto;
   gap: 8px 12px;
 }
 .album-progress-strip > .album-progress-bars { grid-column: 1; grid-row: 1; }
@@ -7241,17 +7113,6 @@ from { transform:rotate(0deg); }
   background: transparent;
   visibility: hidden;
 }
-.album-detail-hero.is-uncollected .album-profile-shiny {
-  visibility: visible;
-  background: #28323b;
-  border-color: #58636b;
-  color: #d6dee3;
-  box-shadow: inset 0 1px 0 #ffffff16, 0 2px 8px #0004;
-}
-.album-detail-hero.is-uncollected .album-profile-shiny[aria-pressed="true"] {
-  color: #e2c77f;
-  border-color: #8c7950;
-}
 .album-detail-hero.is-uncollected :is(.album-card-titlebar, .album-card-details, .album-card-footer, .album-detail-id),
 .album-detail-hero.is-uncollected :is(.album-card-titlebar, .album-card-details, .album-card-footer, .album-detail-id) * {
   visibility: hidden !important;
@@ -7313,6 +7174,40 @@ from { transform:rotate(0deg); }
   font-weight: 800;
   line-height: 1.3;
   overflow-wrap: anywhere;
+}
+.album-profile-cover-return {
+  min-width: 24cqw;
+  max-width: 72%;
+  min-height: 7.5cqw;
+  padding: 1.4cqw 4.4cqw;
+  border: 1px solid #81929e66;
+  border-radius: 999px;
+  background: linear-gradient(180deg, #35424ce8, #1b252ce8);
+  color: #e5edf1;
+  box-shadow: inset 0 1px 0 #ffffff1c, 0 4px 12px #0003;
+  font: inherit;
+  font-size: 2.7cqw;
+  font-weight: 900;
+  line-height: 1.15;
+  text-align: center;
+  white-space: nowrap;
+  cursor: pointer;
+  pointer-events: auto;
+  transition: transform 120ms ease, background 120ms ease, border-color 120ms ease;
+}
+.album-profile-cover-return:hover {
+  background: linear-gradient(180deg, #42515ce8, #222e36e8);
+  border-color: #9babb666;
+}
+.album-profile-cover-return:active { transform: translateY(1px); }
+.album-profile-cover-return:focus-visible {
+  outline: 2px solid #dce8ee;
+  outline-offset: 2px;
+}
+.album-profile-cover-return[hidden] { display: none; }
+.album-profile-cover-return[aria-busy="true"] { cursor: wait; }
+@media (prefers-reduced-motion: reduce) {
+  .album-profile-cover-return { transition: none; }
 }
 .album-panel > .album-panel-heading :is(.album-heading-identity, .album-heading-identity > div, .album-search, .album-view-toggle) {
   min-width: 0;

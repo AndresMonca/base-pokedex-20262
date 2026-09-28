@@ -1,16 +1,7 @@
-<div align="left">
+# Wikidex · Pokédex React
 
-# Pokédex
+**Autor:** *Edwin Andres Montaño Castañeda*
 
-### Proyecto web de Pokédex interactiva
+**GitHub Pages:** [Link](https://andresmonca.github.io/base-pokedex-20262/)
 
----
-
-**Nombre:**  
-Edwin Andres Montaño Castañeda
-
-**GitHub Pages:**  
-[Ver proyecto](https://andresmonca.github.io/base-pokedex-20262/
-)
-
-</div>
+[📄 Ver informe detallado de la migración a React](./docs/informe-migracion-react.md)
