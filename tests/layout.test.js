@@ -5,6 +5,7 @@ import {
   albumDeviceLayout,
   chooseAlbumGrid,
   deviceOpeningFit,
+  sideDrawersFitOutside,
   sideTriggersFitOutside,
 } from "../src/domain/layout.js";
 
@@ -58,4 +59,63 @@ test("album/device responsive decisions account for reduced height and landscape
   const narrowLandscape = albumDeviceLayout(667, 375);
   assert.ok(narrowLandscape.scale < 0.5);
   assert.equal(narrowLandscape.embedded, true);
+});
+
+
+test("landscape album keeps cards useful without changing the approved portrait behavior", () => {
+  const layout = chooseAlbumGrid(1040, 150, 8, 8, 16);
+  assert.equal(layout.columns, 4);
+  assert.equal(layout.rows, 1);
+  assert.ok(layout.cardWidth >= 160);
+  assert.ok(Math.abs(layout.cardWidth / (layout.cardWidth / ALBUM_CARD_RATIO) - 4 / 3) < 1e-9);
+  const portrait = chooseAlbumGrid(340, 780, 8, 8, 16);
+  assert.equal(portrait.columns, 1);
+  assert.ok(portrait.cardWidth >= 240);
+});
+
+test("album grid uses extra complete rows when they fit at a readable size", () => {
+  const layout = chooseAlbumGrid(1000, 500, 8, 8, 16);
+  assert.ok(layout.rows >= 2);
+  assert.ok(layout.cardWidth >= 160);
+});
+
+test("side drawers remain outside only when drawer and trigger fit inside the safety margin", () => {
+  assert.equal(sideDrawersFitOutside({
+    stageLeft: 0, stageRight: 1920, viewportWidth: 1920,
+    deviceLeft: 750, deviceRight: 1170, drawerWidth: 414, triggerWidth: 34, margin: 10,
+  }), true);
+  assert.equal(sideDrawersFitOutside({
+    stageLeft: 0, stageRight: 1366, viewportWidth: 1366,
+    deviceLeft: 473, deviceRight: 893, drawerWidth: 414, triggerWidth: 34, margin: 10,
+  }), true);
+  assert.equal(sideDrawersFitOutside({
+    stageLeft: 0, stageRight: 1100, viewportWidth: 1100,
+    deviceLeft: 340, deviceRight: 760, drawerWidth: 414, triggerWidth: 34, margin: 10,
+  }), false);
+});
+
+test("extremely short album surfaces keep a readable card width instead of distorting cards", () => {
+  const layout = chooseAlbumGrid(760, 72, 8, 8, 16);
+  assert.equal(layout.rows, 1);
+  assert.ok(layout.cardWidth >= 160);
+  assert.ok(Math.abs(layout.cardWidth / (layout.cardWidth / ALBUM_CARD_RATIO) - 4 / 3) < 1e-9);
+});
+
+test("side-control geometry is based on layout viewport coordinates", () => {
+  // Browser/trackpad pinch zoom changes visualViewport, but runtime now keeps
+  // this layout-viewport geometry unchanged until the actual layout resizes.
+  const layout = {
+    stageLeft: 0, stageRight: 1366, viewportLeft: 0, viewportWidth: 1366,
+    deviceLeft: 473, deviceRight: 893, triggerWidth: 34, margin: 10,
+  };
+  assert.equal(sideTriggersFitOutside(layout), true);
+  assert.equal(sideTriggersFitOutside({ ...layout, triggerWidth: 448 }), true);
+});
+
+test("portrait album can use two full rows with only a small proportional card reduction", () => {
+  const layout = chooseAlbumGrid(340, 500, 8, 8, 16);
+  assert.equal(layout.columns, 1);
+  assert.equal(layout.rows, 2);
+  assert.ok(layout.cardWidth >= 300);
+  assert.ok(Math.abs(layout.cardWidth / (layout.cardWidth / ALBUM_CARD_RATIO) - 4 / 3) < 1e-9);
 });

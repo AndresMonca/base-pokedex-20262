@@ -41,7 +41,7 @@ export function SideDrawers() {
                   <strong id="battleSpriteMode">Base</strong>
                 </figcaption>
                 <div className="battle-sprite-frame">
-                  <img id="battleSprite" alt="" />
+                  <img id="battleSprite" alt="" decoding="async" />
                 </div>
               </figure>
             </div>

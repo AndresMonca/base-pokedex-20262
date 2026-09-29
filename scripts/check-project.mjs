@@ -12,6 +12,31 @@ for (const file of [
   if (!fs.existsSync(path.join(root, file))) fail(`missing ${file}`);
 }
 
+
+
+const requiredFiles = [
+  ".github/workflows/deploy-pages.yml",
+  "docs/informe-migracion-react.md",
+  "public/assets/backgrounds/album-pokeball.png",
+  "public/assets/images/wikidex-logo.png",
+  "public/assets/pokeballs/closed.svg",
+  "public/assets/pokeballs/closed-shiny.svg",
+];
+for (const file of requiredFiles) {
+  if (!fs.existsSync(path.join(root, file))) fail(`missing required project file ${file}`);
+}
+
+const pokemonTypes = [
+  "normal", "fire", "water", "electric", "grass", "ice", "fighting", "poison", "ground",
+  "flying", "psychic", "bug", "rock", "ghost", "dragon", "dark", "steel", "fairy",
+];
+for (const type of pokemonTypes) {
+  for (const prefix of ["public/assets/types", "public/assets/types/shiny"]) {
+    const file = `${prefix}/${type}.svg`;
+    if (!fs.existsSync(path.join(root, file))) fail(`missing type asset ${file}`);
+  }
+}
+
 const runtime = read("src/runtime/pokedexRuntime.js");
 const componentDir = path.join(root, "src/components");
 const components = fs.readdirSync(componentDir)
@@ -49,9 +74,19 @@ if (!runtime.includes('CAPTURE_STORAGE_KEY') && !read("src/services/captureStora
 }
 
 const css = read("public/style.css");
+for (const match of css.matchAll(/url\(["']?([^"')?#]+)(?:\?[^"')]+)?["']?\)/g)) {
+  const asset = match[1];
+  if (!asset.startsWith("assets/")) continue;
+  if (!fs.existsSync(path.join(root, "public", asset))) fail(`CSS references missing asset ${asset}`);
+}
 if (css.includes(".pokedex.interface-only")) fail("obsolete interface-only CSS is still present");
 for (const contract of ["--device-width: 420px", "aspect-ratio: 4 / 3", "aspect-ratio: 63/88"]) {
   if (!css.includes(contract)) fail(`design contract not found in CSS: ${contract}`);
 }
 
-if (!process.exitCode) console.log(`Project contract OK: ${required.size} runtime DOM ids resolved, ${present.size} unique ids rendered, ${originalIdSet.size} original ids preserved.`);
+const readme = read("README.md");
+if (!readme.includes("./docs/informe-migracion-react.md")) fail("README does not link to the migration report");
+const viteConfig = read("vite.config.js");
+if (!viteConfig.includes('base: "./"')) fail("Vite base must remain relative for GitHub Pages");
+
+if (!process.exitCode) console.log(`Project contract OK: ${required.size} runtime DOM ids resolved, ${present.size} unique ids rendered, all ${originalIdSet.size} original ids preserved, required assets verified.`);

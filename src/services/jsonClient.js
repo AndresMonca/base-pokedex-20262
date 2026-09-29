@@ -5,7 +5,12 @@ export function createJsonClient({ timeout = 12000, maxEntries = 256 } = {}) {
     const controller = new AbortController();
     const abort = () => controller.abort();
     signal?.throwIfAborted();
-    if (cache.has(url)) return cache.get(url);
+    if (cache.has(url)) {
+      const cached = cache.get(url);
+      cache.delete(url);
+      cache.set(url, cached);
+      return cached;
+    }
     signal?.addEventListener("abort", abort, { once: true });
     const timer = window.setTimeout(abort, timeout);
     try {

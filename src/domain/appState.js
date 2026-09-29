@@ -29,9 +29,12 @@ export function createInitialState() {
 }
 
 
-export function capturedAlternateVariant(id, currentShiny, capturedVariants) {
+export function profileAlternateVariant(id, currentShiny, capturedVariants) {
   const shiny = !currentShiny;
   const key = `${id}:${shiny ? "shiny" : "normal"}`;
-  if (!capturedVariants.has(key)) return null;
-  return { shiny, label: shiny ? "View Shiny" : "View Base" };
+  return {
+    shiny,
+    label: shiny ? "View Shiny" : "View Base",
+    captured: capturedVariants.has(key),
+  };
 }

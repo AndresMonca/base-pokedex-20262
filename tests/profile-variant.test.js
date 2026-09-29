@@ -1,18 +1,19 @@
 import test from "node:test";
 import assert from "node:assert/strict";
-import { capturedAlternateVariant } from "../src/domain/appState.js";
+import { profileAlternateVariant } from "../src/domain/appState.js";
 
-test("locked Shiny card offers Base only when Base is captured", () => {
+test("locked Shiny card can return to Base and reports whether Base is captured", () => {
   const captured = new Set(["1:normal"]);
-  assert.deepEqual(capturedAlternateVariant(1, true, captured), { shiny: false, label: "View Base" });
+  assert.deepEqual(profileAlternateVariant(1, true, captured), { shiny: false, label: "View Base", captured: true });
 });
 
-test("locked Base card offers Shiny only when Shiny is captured", () => {
+test("locked Base card can switch to Shiny and reports whether Shiny is captured", () => {
   const captured = new Set(["1:shiny"]);
-  assert.deepEqual(capturedAlternateVariant(1, false, captured), { shiny: true, label: "View Shiny" });
+  assert.deepEqual(profileAlternateVariant(1, false, captured), { shiny: true, label: "View Shiny", captured: true });
 });
 
-test("locked card exposes no return control when the other variant is not captured", () => {
-  assert.equal(capturedAlternateVariant(1, true, new Set()), null);
-  assert.equal(capturedAlternateVariant(1, false, new Set(["2:shiny"])), null);
+test("View Base and View Shiny remain available even when neither variant is captured", () => {
+  const captured = new Set();
+  assert.deepEqual(profileAlternateVariant(1, true, captured), { shiny: false, label: "View Base", captured: false });
+  assert.deepEqual(profileAlternateVariant(1, false, captured), { shiny: true, label: "View Shiny", captured: false });
 });

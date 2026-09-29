@@ -23,6 +23,9 @@
   --motion-panel: 280ms;
   --motion-scene: 560ms;
   --ease-standard: cubic-bezier(.2,.78,.18,1);
+  --menu-eyebrow-size: .65rem;
+  --menu-header-gap: 4px;
+  --menu-header-control: 40px;
   --layer-content: 1;
   --layer-controls: 5;
   --layer-panel: 8;
@@ -59,12 +62,15 @@ syntax: "<angle>";
 
 html {
   background: #fff;
+  -webkit-text-size-adjust: 100%;
+  text-size-adjust: 100%;
 }
 
 body {
   margin: 0;
   min-height: 100vh;
   overflow: hidden;
+  overscroll-behavior: none;
   background: #fff;
   color: var(--ink);
   font-family: "Nunito Sans", system-ui, sans-serif;
@@ -127,6 +133,10 @@ h2 {
   align-content: start;
 }
 
+@supports not (height: 100dvh) {
+  .app-layout { height: 100vh; }
+}
+
 .device-stage {
   position: relative;
   container-type: inline-size;
@@ -137,6 +147,8 @@ h2 {
   grid-template-rows: minmax(0, 1fr);
   place-items: center;
   padding: 24px 22px;
+  padding: max(24px, env(safe-area-inset-top)) max(22px, env(safe-area-inset-right))
+    max(24px, env(safe-area-inset-bottom)) max(22px, env(safe-area-inset-left));
   overflow: hidden;
   background: #fff;
 }
@@ -493,7 +505,8 @@ h2 {
   width: 100%;
   height: 100%;
   color: #62808e;
-  animation: scanner-breathe 1.8s ease-in-out infinite;
+  transform-origin: 50% 50%;
+  animation: loader-pokeball-spin 1.1s linear infinite;
 }
 
 .screen-surface {
@@ -778,10 +791,18 @@ h2 {
 }
 
 .scanner-loader {
-  width: clamp(68px,22%,96px);
+  width: clamp(62px,20%,88px);
   aspect-ratio: 1;
   display: grid;
   place-items: center;
+  filter: drop-shadow(0 5px 9px rgba(35,74,94,.14));
+}
+.loading-state strong {
+  margin-top: 12px;
+  color: var(--text-strong);
+  font-size: .82rem;
+  font-weight: 900;
+  letter-spacing: .02em;
 }
 
 .error-symbol {
@@ -2605,7 +2626,7 @@ img[data-sprite-fitting] {
 
 .album-panel {
   container-name: album-surface;
-  container-type: inline-size;
+  container-type: size;
   position: absolute;
   z-index: var(--layer-content);
   top: 12px;
@@ -2906,7 +2927,7 @@ img[data-sprite-fitting] {
   font-size: .52rem;
   font-weight: 900;
   letter-spacing: .04em;
-  text-transform: uppercase;
+  text-transform: none;
 }
 
 .album-variant.is-shiny {
@@ -3029,7 +3050,7 @@ img[data-sprite-fitting] {
   justify-content: center;
   align-content: center;
   gap: 12px;
-  padding: 14px;
+  padding: 20px 14px 8px;
   min-height: 0;
   overflow: hidden;
   --album-card-min:12rem;
@@ -3429,12 +3450,6 @@ img[data-sprite-fitting] {
   border-bottom: 1px solid #bddbe4;
 }
 
-.album-profile-nav button[aria-pressed="true"] {
-  border-color: #a7d0db;
-  box-shadow: 0 3px 6px #29556612;
-  background:#30778c;
-  color:#fff;
-}
 
 .album-profile-pages {
   min-height: 0;
@@ -3445,7 +3460,7 @@ img[data-sprite-fitting] {
 
 .album-detail-description {
   font-size: .85rem;
-  color: #234a5e;
+  color: var(--profile-ink, #234a5e);
 }
 
 .album-detail-facts {
@@ -3459,7 +3474,7 @@ img[data-sprite-fitting] {
 }
 
 .album-detail-facts dt {
-  color: #62808e;
+  color: var(--profile-ink-muted, #62808e);
 }
 
 .album-detail-facts dd {
@@ -3486,7 +3501,7 @@ img[data-sprite-fitting] {
   border: 1px solid color-mix(in srgb,var(--detail-color) 25%,#d0e4eb);
   border-radius: 9px;
   background: color-mix(in srgb,var(--detail-color) 12%,#f8ffff);
-  color: #234a5e;
+  color: var(--profile-ink-strong, #234a5e);
   font-size: .65rem;
   font-weight: 900;
   font-variant-numeric: tabular-nums;
@@ -3996,7 +4011,7 @@ img[data-sprite-fitting] {
 .album-detail-body {
   flex: 1;
   display: grid;
-  grid-template-columns: minmax(0,min(410px,44%,max(260px,calc((100cqh - 138px) * 63 / 88)))) minmax(0,1fr);
+  grid-template-columns: minmax(0, var(--profile-card-width, min(410px, 44%))) minmax(0,1fr);
   grid-template-rows: minmax(0,1fr);
   align-items: stretch;
   gap: var(--profile-gap);
@@ -4067,6 +4082,9 @@ img[data-sprite-fitting] {
   align-items:stretch;
   gap:12px;
   padding:12px;
+  overflow-x:hidden;
+  overflow-y:auto;
+  scrollbar-width:thin;
 }
 
 .compact-profile > .album-detail-hero {
@@ -4137,9 +4155,11 @@ img[data-sprite-fitting] {
   position: relative;
   z-index: var(--layer-content);
   width: min(88%, 320px);
-  margin-inline: auto;
-  margin-top: calc(var(--screen-content-inset) * 2);
+  margin: 0 auto;
+  flex: 1 1 auto;
+  min-height: 0;
   display: grid;
+  align-content: center;
   gap: var(--screen-content-inset);
 }
 
@@ -4174,11 +4194,12 @@ img[data-sprite-fitting] {
   font-size: 1.75rem;
   display: grid;
   place-items: center;
-  border: 1px solid rgba(255,255,255,.88);
+  border: 0;
   border-radius: 10px;
-  background: linear-gradient(145deg,#7dd6e7,#2d91ba);
-  box-shadow: inset 0 1px rgba(255,255,255,.45),0 3px 8px rgba(34,113,139,.2);
+  background: #55b9d2;
+  box-shadow: none;
   color: white;
+  overflow: hidden;
 }
 
 .gym-option-icon svg {
@@ -4191,7 +4212,7 @@ img[data-sprite-fitting] {
 }
 
 .gym-option-album[data-captured="true"] .gym-option-icon {
-  background: linear-gradient(145deg,#67d9ae,#279a71);
+  background: #45bb8c;
 }
 
 .gym-option-copy {
@@ -4233,16 +4254,51 @@ img[data-sprite-fitting] {
 
 .gym-option:disabled {
   opacity: 1;
-  color: #62808e;
-  background: #e9f7fa;
+  color: #708995;
+  background: #edf7f9;
+  border-color: #d2e5e9;
   box-shadow: none;
+  cursor: default;
 }
 
 .gym-option:disabled .gym-option-icon {
-  background: #c5e3ea;
-  color: #62808e;
+  background: #dfe9ed;
+  border: 0;
+  color: #78919c;
   box-shadow: none;
 }
+
+.gym-option-casino:disabled .gym-casino-icon,
+.gym-option-future:disabled .gym-suika-icon {
+  border: 0;
+  background: #dfe9ed;
+  box-shadow: none;
+}
+.gym-casino-icon {
+  color: #78919c;
+}
+.gym-casino-icon svg {
+  width: 29px;
+  height: 29px;
+  fill: currentColor;
+  stroke: none;
+}
+.gym-suika-icon {
+  padding: 5px;
+}
+.gym-suika-icon img {
+  display: block;
+  width: 100%;
+  height: 100%;
+  object-fit: contain;
+  object-position: center;
+  filter: brightness(0);
+  opacity: .48;
+  user-select: none;
+  -webkit-user-drag: none;
+}
+.gym-option:disabled .gym-option-copy strong { color: #607b87; }
+.gym-option:disabled .gym-option-copy small { color: #8aa0aa; }
 
 .pokedex.gym-open .album-toggle {
   --type-rgb: 54,139,165;
@@ -4857,6 +4913,10 @@ img[data-sprite-fitting] {
   display: flex;
   gap: 7px;
   flex-shrink: 0;
+  padding: 0;
+  border: 0;
+  background: transparent;
+  box-shadow: none;
 }
 
 .album-command button {
@@ -5296,8 +5356,11 @@ to {
   }
 }
 
-@keyframes scanner-breathe {
-0%,100% { opacity:.65; transform:scale(.96); } 50% { opacity:1; transform:scale(1); }
+@keyframes loader-pokeball-spin {
+  to { transform: rotate(360deg); }
+}
+@media (prefers-reduced-motion: reduce) {
+  .scanner-loader .pokeball { animation: none; }
 }
 
 @keyframes captured-outline-flow {
@@ -5429,31 +5492,27 @@ from { transform:rotate(0deg); }
 
 }
 
-/* Keep full-sized panels over the central screen when three cannot fit. */
-@media (max-width:1360px) {
-  .side-drawer {
-    z-index: 12;
-    left: 3px;
-    right: auto;
-    width: var(--blue-panel-width);
-  }
-
-  .pokedex.drawer-info-open .side-drawer-info,
-  .pokedex.drawer-stats-open .side-drawer-stats,
-  .pokedex.drawer-info-open .screen-edge-left {
-    transform: none;
-  }
-
-  .pokedex.drawer-stats-open .screen-edge-right {
-    transform: scaleX(-1);
-  }
-
-
-  .pokedex.drawer-info-open .side-trigger-info,
-  .pokedex.drawer-stats-open .side-trigger-stats {
-    transform: none;
-  }
-
+/* Drawers stay outside whenever their real scaled geometry fits. Runtime adds
+   this class only when the complete drawer + trigger would cross the viewport
+   safety margin, so the fallback is based on available space rather than a
+   generic breakpoint. */
+.pokedex.side-drawers-inside .side-drawer {
+  z-index: 12;
+  left: 3px;
+  right: auto;
+  width: var(--blue-panel-width);
+}
+.pokedex.side-drawers-inside.drawer-info-open .side-drawer-info,
+.pokedex.side-drawers-inside.drawer-stats-open .side-drawer-stats,
+.pokedex.side-drawers-inside.drawer-info-open .screen-edge-left {
+  transform: none;
+}
+.pokedex.side-drawers-inside.drawer-stats-open .screen-edge-right {
+  transform: scaleX(-1);
+}
+.pokedex.side-drawers-inside.drawer-info-open .side-trigger-info,
+.pokedex.side-drawers-inside.drawer-stats-open .side-trigger-stats {
+  transform: none;
 }
 
 @media (max-width:760px) {
@@ -5849,7 +5908,10 @@ from { transform:rotate(0deg); }
   display: flex;
   justify-content: space-between;
   min-height: 0;
-  padding: 8px var(--album-content-inset) var(--album-content-inset);
+  padding-top: 8px;
+  padding-right: max(var(--album-content-inset), 14px);
+  padding-bottom: max(var(--album-content-inset), 12px);
+  padding-left: max(var(--album-content-inset), 14px);
   border: 0;
   background: transparent;
 }
@@ -5873,7 +5935,7 @@ from { transform:rotate(0deg); }
 .album-panel > .album-grid {
   grid-row: 2;
   gap: 8px;
-  padding: 0 var(--album-content-inset);
+  padding: 20px var(--album-content-inset) 8px;
   align-content: start;
   justify-content: center;
   justify-items: center;
@@ -6182,9 +6244,10 @@ from { transform:rotate(0deg); }
   min-height: 88px;
   padding: 4px;
   flex: 0 0 88px;
-  border: 1px solid #ffffff9c;
+  border: 0;
   border-radius: 14px;
   background: #5099d1;
+  box-shadow: inset 0 1px 0 #ffffff30, 0 3px 8px rgba(39,99,121,.12);
   color: #fff;
   text-shadow: 0 1px 3px #0005;
   animation: album-progress-colors 54s linear infinite;
@@ -6317,6 +6380,12 @@ from { transform:rotate(0deg); }
 .album-card-clean.is-missing::before, .album-card-clean.is-missing::after { background: rgba(var(--pending-rgb), .13); }
 .album-card-clean.is-missing .album-card-heading strong { color: #79818d; }
 .album-card-clean.is-missing .album-variant { color: #858d98; background: #e3e7ec; }
+.album-card-clean .album-variant {
+  min-height: 18px;
+  line-height: 1;
+  padding-block: 3px;
+  text-transform: none;
+}
 
 /* Keep the central controls' horizontal and vertical insets equal. */
 .pokemon-heading {
@@ -6339,7 +6408,7 @@ from { transform:rotate(0deg); }
   text-align: center;
 }
 
-/* Matched capture/release artwork; the icon keeps its own square proportions. */
+/* Capture/release control: keep the existing animation, but make the resting-state handoff fluid and deterministic. */
 .capture-pokeball {
   display: block;
   flex-shrink: 0;
@@ -6348,30 +6417,77 @@ from { transform:rotate(0deg); }
   background: url("assets/pokeballs/closed.svg?v=86") center / contain no-repeat;
   pointer-events: none;
 }
-.capture-toggle { display: grid; place-items: center; overflow: hidden; }
+.capture-toggle {
+  display: grid;
+  place-items: center;
+  overflow: hidden;
+}
+.capture-toggle > .capture-pokeball {
+  position: relative;
+  left: 0;
+  bottom: 0;
+  width: 28px;
+  height: 28px;
+  transition:
+    width 140ms var(--ease-standard),
+    height 140ms var(--ease-standard),
+    left 140ms var(--ease-standard),
+    bottom 140ms var(--ease-standard),
+    opacity 110ms var(--ease-standard);
+}
 .capture-ball.capture-pokeball { width: 48px; height: 48px; }
 .capture-ball[hidden] { display: none; }
 .capture-release-arrow {
-  display: none;
+  display: block;
   position: absolute;
-  right: 12%;
-  top: 12%;
-  width: 38%;
-  height: 38%;
+  right: 11%;
+  top: 11%;
+  width: 34%;
+  height: 34%;
   padding: 0;
   border: 0;
   color: #234a5e;
   background: transparent;
+  opacity: 0;
+  visibility: hidden;
+  transform: translate(-1px, 1px) scale(.72);
+  transform-origin: center;
   pointer-events: none;
+  transition:
+    opacity 100ms var(--ease-standard),
+    transform 120ms var(--ease-standard),
+    visibility 0s linear 120ms;
 }
-.capture-toggle[aria-pressed="true"] .capture-pokeball {
+.capture-toggle[aria-pressed="true"] > .capture-pokeball {
   position: absolute;
   width: 58%;
   height: 58%;
   left: 11%;
   bottom: 11%;
 }
-.capture-toggle[aria-pressed="true"] .capture-release-arrow { display: block; }
+.pokemon-state.is-captured .capture-toggle[aria-pressed="true"] .capture-release-arrow {
+  opacity: 1;
+  visibility: visible;
+  transform: translate(0, 0) scale(1);
+  transition-delay: 85ms, 85ms, 0s;
+}
+.capture-toggle.is-releasing .capture-release-arrow,
+.pokemon-state:not(.is-captured) .capture-release-arrow {
+  opacity: 0 !important;
+  visibility: hidden !important;
+  transform: translate(-1px, 1px) scale(.72) !important;
+  transition-delay: 0s !important;
+}
+/* During both capture and release, the control keeps the same quiet inactive treatment. */
+.capture-toggle:is(.is-capturing, .is-releasing):disabled {
+  opacity: .5;
+  cursor: default;
+  pointer-events: none;
+}
+@media (prefers-reduced-motion: reduce) {
+  .capture-toggle > .capture-pokeball,
+  .capture-release-arrow { transition-duration: 0ms; }
+}
 .pokedex.has-pokemon:not(.home-active):not(.gym-open):not(.album-open):has(#shinyToggle[aria-pressed="true"])
   :is(#captureToggle, #shinyToggle, #searchToggle, #albumToggle):is(:enabled, :disabled) {
   --icon-control-border: #fff5c6;
@@ -6602,6 +6718,25 @@ from { transform:rotate(0deg); }
   font-size: 2.1cqw;
 }
 .album-detail-hero .album-card-footer > span:last-child { font-size: 3cqw; }
+
+/* WikiDex stays a quiet typographic signature on Profile cards. */
+.album-detail-hero .album-card-wikidex {
+  color: currentColor;
+  font-size: 3cqw;
+  font-weight: 900;
+  line-height: 1;
+  letter-spacing: -.035em;
+  white-space: nowrap;
+}
+.album-profile-cover-brand .album-cover-wikidex {
+  color: currentColor;
+  font-size: 5cqw;
+  font-weight: 900;
+  line-height: 1;
+  letter-spacing: -.035em;
+  white-space: nowrap;
+}
+
 .album-detail-hero.has-no-moves {
   grid-template-rows: minmax(0,12%) minmax(0,58%) minmax(0,30%);
 }
@@ -6630,23 +6765,29 @@ from { transform:rotate(0deg); }
   --menu-gap: 12px;
   --menu-title-size: clamp(22px, 1.9vw, 30px);
 }
+:is(.gym-heading, .album-filter-heading, .album-command-heading) {
+  min-height: 66px;
+  justify-content: center;
+  align-content: center;
+}
 :is(.album-detail-header h2, .progress-heading h2, .gym-heading h2,
   .album-filter-heading > strong, .album-command-heading > strong) {
   margin: 0;
   font-size: var(--menu-title-size);
   font-weight: 900;
-  line-height: 1.15;
+  line-height: 1.08;
   letter-spacing: -.04em;
   text-wrap: balance;
+  overflow-wrap: anywhere;
 }
 :is(.album-detail-header .album-heading-identity > div > span,
   .progress-heading .eyebrow, .gym-heading > span,
   .album-filter-heading > span, .album-command-heading > span) {
   color: var(--text-muted);
-  font-size: .65rem;
+  font-size: var(--menu-eyebrow-size);
   font-weight: 900;
-  line-height: 1.3;
-  letter-spacing: .09em;
+  line-height: 1.25;
+  letter-spacing: .1em;
   text-transform: uppercase;
 }
 .album-detail-header {
@@ -6669,15 +6810,30 @@ from { transform:rotate(0deg); }
 #albumDetailClose svg { width: 20px; height: 20px; }
 .album-detail-body { --profile-gap: var(--menu-inset); }
 .album-detail-info {
+  --profile-type-blend: color-mix(in srgb, var(--detail-color, #54899c) 52%, var(--detail-secondary, var(--detail-color, #54899c)));
+  --profile-ink-strong: color-mix(in srgb, var(--profile-type-blend) 44%, #173747);
+  --profile-ink: color-mix(in srgb, var(--profile-type-blend) 30%, #234a5e);
+  --profile-ink-muted: color-mix(in srgb, var(--profile-type-blend) 24%, #62808e);
   container-type: inline-size;
   border-radius: var(--radius-panel);
   background: #f4fdffb3;
+  color: var(--profile-ink);
   box-shadow: inset 0 1px 0 #ffffff80;
 }
 :is(.album-profile-nav, .album-mobile-profile-nav, .progress-tabs, .album-command-tabs) {
   gap: 8px;
 }
-.album-profile-nav { padding: 8px; background: #dceff380; }
+.album-mobile-profile-nav {
+  background: linear-gradient(110deg,
+    color-mix(in srgb, var(--detail-color, #8db9c7) 9%, #f7ffff),
+    color-mix(in srgb, var(--detail-secondary, var(--detail-color, #8db9c7)) 9%, #f7ffff));
+}
+.album-profile-nav {
+  padding: 8px;
+  background: linear-gradient(110deg,
+    color-mix(in srgb, var(--detail-color, #8db9c7) 9%, #f7ffff),
+    color-mix(in srgb, var(--detail-secondary, var(--detail-color, #8db9c7)) 9%, #f7ffff));
+}
 :is(.album-profile-nav, .album-mobile-profile-nav, .progress-tabs, .album-command-tabs) > button {
   border-radius: var(--radius-control);
   font-size: .75rem;
@@ -6685,7 +6841,15 @@ from { transform:rotate(0deg); }
   line-height: 1.2;
 }
 :is(.album-profile-nav, .album-mobile-profile-nav, .progress-tabs) > button { min-height: 40px; padding: 9px 12px; }
-:is(.album-profile-nav, .album-mobile-profile-nav, .progress-tabs, .album-command-tabs) > button[aria-pressed="true"] {
+:is(.album-profile-nav, .album-mobile-profile-nav, .album-command-tabs) > button[aria-pressed="true"] {
+  background: linear-gradient(110deg,
+    color-mix(in srgb, var(--detail-color, #30778c) 92%, #234a5e),
+    color-mix(in srgb, var(--detail-secondary, var(--detail-color, #30778c)) 92%, #234a5e));
+  color: #fff;
+  border-color: color-mix(in srgb, var(--detail-color, #30778c) 42%, white);
+  box-shadow: inset 0 1px 0 #ffffff36, 0 2px 6px rgba(25,61,76,.10);
+}
+.progress-tabs > button[aria-pressed="true"] {
   background: #30778c;
   color: #fff;
   border-color: #a7d0db;
@@ -6693,8 +6857,19 @@ from { transform:rotate(0deg); }
 }
 .album-profile-pages {
   padding: var(--menu-inset);
-  scrollbar-color: #8db9c7 transparent;
+  scrollbar-color: color-mix(in srgb, var(--detail-color, #8db9c7) 52%, #b6d9e0) transparent;
   scrollbar-gutter: stable;
+}
+.album-detail-info :is(.album-journal-title, .album-detail-stats h3, .album-research h3,
+  .album-moves-heading, .album-stat-total strong, .album-detail-facts dd) {
+  color: var(--profile-ink-strong);
+}
+.album-detail-info :is(.album-detail-description, .album-profile-nav > button:not([aria-pressed="true"])) {
+  color: var(--profile-ink);
+}
+.album-detail-info :is(.album-detail-kicker, .album-detail-facts dt, .album-stat-total small,
+  .album-trait-caption, .album-research-note) {
+  color: var(--profile-ink-muted);
 }
 .album-detail .album-journal-title,
 .album-detail-stats header h3 {
@@ -6914,9 +7089,9 @@ from { transform:rotate(0deg); }
 .album-panel > .album-panel-heading .album-progress-stat .album-page-indicator {
   --page-font-size: 10px;
   inset: auto 6px 6px;
-  border: 1px solid #ffffff80;
+  border: 0;
   border-radius: 7px;
-  background: #ffffffd9;
+  background: #ffffffde;
   color: #285d72;
   font-weight: 900;
   line-height: 1.2;
@@ -7083,8 +7258,10 @@ from { transform:rotate(0deg); }
   box-shadow: 0 2px 6px #28738914;
 }
 .gym-options {
-  margin-block: auto;
-  flex-shrink: 0;
+  margin: 0 auto;
+  flex: 1 1 auto;
+  min-height: 0;
+  align-content: center;
 }
 .gym-option {
   display: grid;
@@ -7297,4 +7474,232 @@ from { transform:rotate(0deg); }
     grid-column: 2;
     grid-row: 2;
   }
+}
+
+
+
+/* Text and icon robustness: longer localized labels stay inside their boxes,
+   while glyphs are optically centred without changing component geometry. */
+:is(.gym-option, .album-filter-tile, .album-detail-facts > div, .album-trait,
+    .album-profile-nav > button, .album-mobile-profile-nav > button,
+    .album-command-tabs > button, .album-progress-stat, .album-heading-identity,
+    .album-search-actions, .album-card-heading, .album-card-details) { min-width: 0; }
+:is(.gym-option-copy strong, .gym-option-copy small, .album-filter-tile strong,
+    .album-filter-tile small, .album-detail-facts dd, .album-trait-caption,
+    .album-profile-nav > button, .album-mobile-profile-nav > button,
+    .album-command-tabs > button) { max-width: 100%; overflow-wrap: anywhere; }
+:is(.gym-option-icon, .album-heading-icon, .album-close, .gym-back,
+    .album-pagination button, .progress-toggle, .search-toggle, .album-toggle,
+    .shiny-toggle, .capture-toggle) > svg,
+:is(.gym-option-icon, .album-heading-icon) svg { display: block; margin: auto; }
+
+:is(.album-profile-pages, .drawer-inner, #albumMobileFilterContent, .album-detail-body) {
+  scrollbar-width: thin;
+  scrollbar-color: color-mix(in srgb, var(--detail-color, #75aeba) 52%, #b6d9e0) transparent;
+}
+:is(.album-profile-pages, .drawer-inner, #albumMobileFilterContent, .album-detail-body)::-webkit-scrollbar { width: 8px; height: 8px; }
+:is(.album-profile-pages, .drawer-inner, #albumMobileFilterContent, .album-detail-body)::-webkit-scrollbar-track { background: transparent; }
+:is(.album-profile-pages, .drawer-inner, #albumMobileFilterContent, .album-detail-body)::-webkit-scrollbar-thumb {
+  border: 2px solid transparent; border-radius: 999px;
+  background: color-mix(in srgb, var(--detail-color, #75aeba) 48%, #c9e3e8);
+  background-clip: padding-box;
+}
+
+/* Final responsive contract for the Album surface.
+   The window may reflow, but fixed-ratio content keeps its geometry. */
+.album-panel > .album-grid {
+  --album-card-min-useful: 144px;
+}
+.album-panel > .album-grid > :is(.album-card, .album-page-slot) {
+  aspect-ratio: 4 / 3;
+  min-width: 0;
+  min-height: 0;
+}
+@container album-surface (max-width: 520px) {
+  .album-panel > .album-grid {
+    padding-top: 8px;
+    padding-bottom: 4px;
+  }
+  .album-panel > .album-pagination {
+    padding-top: 4px;
+    padding-right: max(var(--album-content-inset), 14px);
+    padding-bottom: max(var(--album-content-inset), 12px);
+    padding-left: max(var(--album-content-inset), 14px);
+  }
+}
+@container album-surface (max-height: 520px) {
+  .album-panel > .album-grid { padding-block: 12px 6px; }
+}
+@container album-surface (max-height: 390px) {
+  .album-panel > .album-grid { padding-block: 8px 4px; }
+}
+.album-detail-hero {
+  flex: 0 0 auto;
+  max-width: 100%;
+  aspect-ratio: 63 / 88;
+}
+.compact-profile > .album-detail-hero {
+  flex-shrink: 0;
+}
+.album-command,
+.album-detail-info,
+.album-profile-pages,
+#albumMobileFilterContent {
+  min-width: 0;
+  min-height: 0;
+}
+
+/* Wide, low-height surfaces: use one compact header row instead of shrinking
+   cards into the remaining strip. */
+@container album-surface (max-height: 560px) and (min-width: 780px) {
+  .album-panel > .album-panel-heading {
+    grid-template-columns: minmax(170px, .58fr) minmax(280px, 1.5fr) minmax(250px, .92fr);
+    grid-template-rows: 64px;
+    column-gap: 14px;
+    row-gap: 0;
+    min-height: 0;
+    padding: 10px var(--album-content-inset) 8px;
+    align-items: center;
+  }
+  .album-panel > .album-panel-heading .album-heading-identity {
+    grid-column: 1;
+    grid-row: 1;
+    align-self: center;
+    justify-self: stretch;
+    text-align: left;
+  }
+  .album-panel > .album-panel-heading h2 {
+    font-size: clamp(20px, 2.6cqw, 28px);
+    line-height: 1.05;
+  }
+  .album-search-actions,
+  .album-search-actions:has(.album-mobile-filter-toggle:not([hidden])) {
+    grid-column: 2;
+    grid-row: 1;
+    align-self: center;
+    gap: 8px;
+  }
+  .album-panel > .album-panel-heading .album-search,
+  .album-panel > .album-panel-heading .album-view-toggle,
+  .album-panel > .album-panel-heading .album-search-actions .album-mobile-filter-toggle:not([hidden]) {
+    height: 38px;
+    min-height: 38px;
+  }
+  .album-panel > .album-panel-heading .album-progress-strip {
+    grid-column: 3;
+    grid-row: 1;
+    align-self: center;
+    gap: 8px;
+  }
+  .album-progress-stat,
+  .album-panel > .album-panel-heading button.progress-toggle {
+    width: 64px;
+    height: 64px;
+    min-width: 64px;
+    min-height: 64px;
+    flex-basis: 64px;
+  }
+  .album-panel > .album-panel-heading button.progress-toggle {
+    padding: 13% 3px 23px;
+    font-size: 18px;
+  }
+  .album-panel > .album-panel-heading .album-progress-bars {
+    height: 64px;
+    gap: 6px;
+  }
+  .album-panel > .album-panel-heading .album-progress-row {
+    grid-template-rows: 11px 12px;
+    row-gap: 3px;
+    font-size: 10px;
+  }
+  .album-panel > .album-panel-heading .album-progress-row progress { height: 12px; }
+  .album-panel > .album-panel-heading .album-progress-stat .album-page-indicator {
+    --page-font-size: 8px;
+    bottom: 4px;
+    width: calc(100% - 8px);
+    height: 17px;
+  }
+  .album-panel > .album-pagination {
+    padding-top: 5px;
+    padding-bottom: 8px;
+  }
+}
+
+/* Mid-width landscape surfaces get two compact rows: identity/progress first,
+   search/actions second. This protects usable card height on phones/tablets. */
+@container album-surface (max-height: 520px) and (min-width: 500px) and (max-width: 779px) {
+  .album-panel > .album-panel-heading {
+    grid-template-columns: minmax(0, 1fr) auto;
+    grid-template-rows: 64px 38px;
+    gap: 7px 10px;
+    min-height: 0;
+    padding: 9px var(--album-content-inset) 8px;
+    align-items: center;
+  }
+  .album-panel > .album-panel-heading .album-heading-identity {
+    grid-column: 1;
+    grid-row: 1;
+    justify-self: stretch;
+    text-align: left;
+  }
+  .album-panel > .album-panel-heading h2 { font-size: clamp(20px, 4cqw, 25px); }
+  .album-panel > .album-panel-heading .album-progress-strip {
+    grid-column: 2;
+    grid-row: 1;
+    width: min(250px, 38cqw);
+    gap: 7px;
+  }
+  .album-progress-stat,
+  .album-panel > .album-panel-heading button.progress-toggle {
+    width: 58px;
+    height: 58px;
+    min-width: 58px;
+    min-height: 58px;
+    flex-basis: 58px;
+  }
+  .album-panel > .album-panel-heading button.progress-toggle {
+    padding: 12% 3px 21px;
+    font-size: 17px;
+  }
+  .album-panel > .album-panel-heading .album-progress-bars { height: 58px; gap: 5px; }
+  .album-panel > .album-panel-heading .album-progress-row {
+    grid-template-rows: 10px 11px;
+    row-gap: 3px;
+    font-size: 9px;
+  }
+  .album-panel > .album-panel-heading .album-progress-row progress { height: 11px; }
+  .album-panel > .album-panel-heading .album-progress-stat .album-page-indicator {
+    --page-font-size: 8px;
+    bottom: 3px;
+    width: calc(100% - 6px);
+    height: 16px;
+  }
+  .album-search-actions,
+  .album-search-actions:has(.album-mobile-filter-toggle:not([hidden])) {
+    grid-column: 1 / -1;
+    grid-row: 2;
+    gap: 7px;
+  }
+  .album-panel > .album-panel-heading .album-search,
+  .album-panel > .album-panel-heading .album-view-toggle,
+  .album-panel > .album-panel-heading .album-search-actions .album-mobile-filter-toggle:not([hidden]) {
+    height: 36px;
+    min-height: 36px;
+  }
+  .album-panel > .album-pagination { padding-top: 4px; padding-right: max(var(--album-content-inset), 14px); padding-bottom: max(var(--album-content-inset), 12px); padding-left: max(var(--album-content-inset), 14px); }
+}
+
+/* Extremely short landscape viewports keep navigation reachable and let
+   content scroll rather than distorting fixed-ratio cards/profile surfaces. */
+@container album-surface (max-height: 390px) {
+  .album-panel { --album-content-inset: 14px; }
+  .album-panel > .album-pagination button {
+    width: 28px;
+    height: 28px;
+    min-height: 28px;
+    flex-basis: 28px;
+  }
+  .album-panel > .album-grid { gap: 7px; }
+  .album-detail-body.compact-profile,
+  .album-embedded .album-detail-body.compact-profile { overflow-y: auto; }
 }

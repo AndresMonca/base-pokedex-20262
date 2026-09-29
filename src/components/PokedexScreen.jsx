@@ -24,19 +24,19 @@ export function PokedexScreen() {
               <div className="home-wallpaper" aria-hidden="true">
                 <div className="showcase-scene">
                   <canvas width="192" height="212"></canvas>
-                  <img alt="" />
+                  <img alt="" decoding="async" />
                   <span className="showcase-name"></span>
                 </div>
                 <div className="showcase-scene">
                   <canvas width="192" height="212"></canvas>
-                  <img alt="" />
+                  <img alt="" decoding="async" />
                   <span className="showcase-name"></span>
                 </div>
               </div>
               <div className="screen-interface" id="screenInterface">
                 <section className="screen-state home-state" id="homeState" hidden aria-label="Wikidex home">
                   <div className="home-content">
-                    <img className="home-logo" src="assets/images/wikidex-logo.png" alt="Wikidex" />
+                    <img className="home-logo" src="assets/images/wikidex-logo.png" alt="Wikidex" decoding="async" />
                     <div className="search-zone">
                       <form className="search-form" id="searchForm" role="search">
                         <label className="sr-only" htmlFor="pokemonSearch">Search Pokémon by name or number</label>
@@ -57,6 +57,7 @@ export function PokedexScreen() {
                 <p className="sr-only" id="searchStatus" role="status" aria-atomic="true"></p>
                 <section className="screen-state loading-state" id="loadingState" hidden role="status" aria-label="Loading Pokémon">
                   <div className="scanner-loader" aria-hidden="true"><span className="pokeball"></span></div>
+                  <strong>Loading...</strong>
                 </section>
                 <section className="screen-state error-state" id="errorState" hidden>
                   <span className="error-symbol" aria-hidden="true">!</span>
@@ -100,10 +101,20 @@ export function PokedexScreen() {
                       <span className="gym-option-copy"><strong>Pokémon Album</strong><small>Your captured collection</small></span>
                       <span className="gym-option-chevron" aria-hidden="true">›</span>
                     </button>
-<button className="gym-option" type="button" disabled><span className="gym-option-icon" aria-hidden="true">♠</span><span className="gym-option-copy"><strong>Pokémon Casino</strong><small>Unavailable</small></span></button>
-<button className="gym-option" type="button" disabled><span className="gym-option-icon" aria-hidden="true">?</span><span className="gym-option-copy"><strong>???</strong><small>Coming soon</small></span></button>
-                    
-                    
+                    <button className="gym-option gym-option-casino" type="button" disabled aria-label="Pokémon Casino, coming soon">
+                      <span className="gym-option-icon gym-casino-icon" aria-hidden="true">
+                        <svg viewBox="0 0 32 32" focusable="false">
+                          <path d="M16 4.2c-2.5 4-9.1 7.7-9.1 13 0 3.7 2.7 6.1 5.8 6.1 1.2 0 2.3-.4 3.3-1.2-.1 2.3-1.2 4.1-3.6 5.7h7.2c-2.4-1.6-3.5-3.4-3.6-5.7 1 .8 2.1 1.2 3.3 1.2 3.1 0 5.8-2.4 5.8-6.1 0-5.3-6.6-9-9.1-13Z" />
+                        </svg>
+                      </span>
+                      <span className="gym-option-copy"><strong>Pokémon Casino</strong><small>Coming soon</small></span>
+                    </button>
+                    <button className="gym-option gym-option-future" type="button" disabled aria-label="Poké Suika, coming soon">
+                      <span className="gym-option-icon gym-suika-icon" aria-hidden="true">
+                        <img src="https://raw.githubusercontent.com/PokeAPI/sprites/master/sprites/pokemon/other/official-artwork/25.png" alt="" draggable="false" />
+                      </span>
+                      <span className="gym-option-copy"><strong>Poké Suika</strong><small>Coming soon</small></span>
+                    </button>
                   </div>
                 </section>
                 <div className="content-curtain" id="contentCurtain" aria-hidden="true">
@@ -126,7 +137,7 @@ export function PokedexScreen() {
                   <div className="artwork-stage">
                     <span className="artwork-halo" aria-hidden="true">
                     </span>
-                    <img id="pokemonArt" alt="" />
+                    <img id="pokemonArt" alt="" decoding="async" />
                     <span className="capture-ball capture-pokeball" id="captureBall" aria-hidden="true" hidden></span>
                   </div>
                 </div>
@@ -135,7 +146,7 @@ export function PokedexScreen() {
                 </button>
                 <button className="capture-toggle" id="captureToggle" type="button" disabled aria-label="Capture Pokémon" aria-pressed="false">
                   <span className="capture-pokeball" aria-hidden="true"></span>
-                  <svg className="capture-release-arrow" viewBox="0 0 16 16" fill="none" aria-hidden="true"><path d="M4 12 12 4M5 4h7v7" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"/></svg>
+                  <svg className="capture-release-arrow" viewBox="0 0 20 20" fill="none" aria-hidden="true"><path d="M6 14 14 6M8.25 6H14v5.75" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round"/></svg>
                 </button>
                 <span className="sr-only" id="captureStatus" role="status" aria-live="polite"></span>
               </section>

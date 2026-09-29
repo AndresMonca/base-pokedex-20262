@@ -8,7 +8,8 @@
     "build": "vite build",
     "preview": "vite preview",
     "test": "node --test tests/*.test.js",
-    "check": "node --check src/runtime/pokedexRuntime.js && tsc -p tsconfig.check.json && node scripts/check-project.mjs"
+    "check": "node --check vite.config.js && node --check src/runtime/pokedexRuntime.js && tsc -p tsconfig.check.json && node scripts/check-project.mjs",
+    "verify": "npm test && npm run check && npm run build"
   },
   "dependencies": {
     "react": "18.3.1",
@@ -17,5 +18,8 @@
   "devDependencies": {
     "vite": "5.4.11",
     "typescript": "5.8.3"
+  },
+  "engines": {
+    "node": ">=20"
   }
 }

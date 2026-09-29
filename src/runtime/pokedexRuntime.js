@@ -1,7 +1,8 @@
-import { capturedAlternateVariant, createInitialState } from "../domain/appState.js";
+import { createInitialState, profileAlternateVariant } from "../domain/appState.js";
 import { calculateCollectionProgress } from "../domain/collectionProgress.js";
-import { ALBUM_CARD_RATIO, albumDeviceLayout, chooseAlbumGrid, deviceOpeningFit, sideTriggersFitOutside } from "../domain/layout.js";
+import { ALBUM_CARD_RATIO, albumDeviceLayout, chooseAlbumGrid, deviceOpeningFit } from "../domain/layout.js";
 import { humanize, matchesPokemonName, normalizeQuery } from "../domain/text.js";
+import { stableLayoutSize, stableSidePlacement, zoomCompensation } from "../domain/viewport.js";
 import {
   captureEntriesFromMap, captureVariantKey, readCaptureEntries, writeCaptureEntries,
 } from "../services/captureStorage.js";
@@ -26,10 +27,12 @@ export function initPokedexRuntime() {
   // Only exclude the affected state; these forms have valid drawn shiny art.
   let albumPageSize = 8;
   const REQUEST_TIMEOUT = 12000;
+  const layoutDprBaseline = window.devicePixelRatio || 1;
   const fetchJson = createJsonClient({ timeout: REQUEST_TIMEOUT, maxEntries: 256 });
   const MOTION = Object.freeze({ micro:120, control:180, panel:280, scene:560, easing:"cubic-bezier(.2,.78,.18,1)" });
   const CAPTURE_TIMING = Object.freeze({flight:1000, absorb:1050, settle:1250, confirm:850, release:1450});
   const SPRITE_MARGIN = 5;
+  const ARTWORK_BOUNDS_CACHE_LIMIT = 512;
   const progressState = { view:"overview", page:1, species:null, returnFocus:null };
   const ALBUM_SPRITE_URL = "https://raw.githubusercontent.com/PokeAPI/sprites/master/sprites/pokemon";
   const reducedMotion = window.matchMedia("(prefers-reduced-motion: reduce)");
@@ -98,6 +101,22 @@ export function initPokedexRuntime() {
   const showcase = { timer: 0, controller: null, sequence: 0, visibleIndex: -1, lastId: null, queue: [],
     sceneTypes: new Array(showcaseScenes.length).fill(null) };
   const artworkBounds = new Map();
+  const cacheArtworkMeasurement = (key, measurement) => {
+    let tracked;
+    tracked = Promise.resolve(measurement).then((result) => {
+      if (!result && artworkBounds.get(key) === tracked) artworkBounds.delete(key);
+      return result;
+    }, (error) => {
+      if (artworkBounds.get(key) === tracked) artworkBounds.delete(key);
+      throw error;
+    });
+    if (artworkBounds.has(key)) artworkBounds.delete(key);
+    artworkBounds.set(key, tracked);
+    while (artworkBounds.size > ARTWORK_BOUNDS_CACHE_LIMIT) {
+      artworkBounds.delete(artworkBounds.keys().next().value);
+    }
+    return tracked;
+  };
   const fittedSprites = new Map();
   const spriteVariantSources = new WeakMap();
   const spriteSpaceObserver = new ResizeObserver((entries) => {
@@ -137,8 +156,6 @@ export function initPokedexRuntime() {
   let albumCarouselShiny = false;
   let refreshAlbumCarouselVariant;
   let albumDetailReturnFocus;
-  let albumNavigationEntries = [];
-  let albumNavigationIndex = -1;
   let albumRelationsTab = "Evolution";
   const albumRelationCache = new Map();
   const albumCommand = makeElement("section", "album-command");
@@ -407,6 +424,7 @@ export function initPokedexRuntime() {
   function typeIcon(type, className = "type-icon") {
     const icon = makeElement("span", className);
     const image = document.createElement("img");
+    image.decoding = "async";
     icon.setAttribute("aria-hidden", "true");
     image.src = `assets/types/${Object.hasOwn(typeColors, type) ? type : "normal"}.svg?v=4`;
     image.alt = "";
@@ -712,6 +730,7 @@ export function initPokedexRuntime() {
 
   function setImage(image, sources, alt, resolveMissingSources) {
     clearImageUnavailable(image);
+    image.decoding = "async";
     if (image === elements.battleSprite) {
       const old = fittedSprites.get(image);
       if (old) spriteSpaceObserver.unobserve(old.frame);
@@ -816,12 +835,18 @@ export function initPokedexRuntime() {
     if (!(scale > 0)) return;
     image.hidden = false;
     const uniformScale = scale * (bounds.registrationScale ?? 1);
-    const width = bounds.width * uniformScale;
-    const height = bounds.height * uniformScale;
+    const pixelSprite = image.style.imageRendering === "pixelated" ||
+      (image.naturalWidth > 0 && image.naturalWidth <= 128 && image.naturalHeight <= 128);
+    // Pixel sprites stay on whole CSS pixels so their nearest-neighbour edges
+    // remain crisp even while the surrounding responsive layout changes.
+    const width = pixelSprite ? Math.max(1, Math.round(bounds.width * uniformScale)) : bounds.width * uniformScale;
+    const height = pixelSprite ? Math.max(1, Math.round(bounds.height * uniformScale)) : bounds.height * uniformScale;
+    const left = box.left + box.width / 2 - bounds.centerX * width;
+    const top = box.top + box.height / 2 - bounds.centerY * height;
     Object.assign(image.style, {
       width: `${width}px`, height: `${height}px`,
-      left: `${box.left + box.width / 2 - bounds.centerX * width}px`,
-      top: `${box.top + box.height / 2 - bounds.centerY * height}px`,
+      left: `${pixelSprite ? Math.round(left) : left}px`,
+      top: `${pixelSprite ? Math.round(top) : top}px`,
       objectFit: "contain",
       maxWidth: "none", maxHeight: "none"
     });
@@ -949,8 +974,12 @@ export function initPokedexRuntime() {
       const [current, normal, shiny] = await Promise.all(
         [source, pair[0]?.[0], pair[1]?.[0]].map(url => measureArtwork(url, true)));
       if (!image.isConnected || !image.hasAttribute("src") || (image.currentSrc || image.src) !== source) return;
-      if (!current) { image.hidden = true; return; }
-      const fitted = mainArtworkGeometry(current, [normal, shiny]);
+      const safeCurrent = current || (image.naturalWidth && image.naturalHeight ? {
+        width: image.naturalWidth, height: image.naturalHeight,
+        visibleWidth: 1, visibleHeight: 1, centerX: .5, centerY: .5,
+      } : null);
+      if (!safeCurrent) { image.hidden = true; return; }
+      const fitted = mainArtworkGeometry(safeCurrent, [normal, shiny]);
       const bounds = { ...fitted.bounds, collisionShape: fitted.shape };
       fittedSprites.set(image, { frame: image.parentElement, bounds });
       spriteSpaceObserver.observe(image.parentElement);
@@ -1026,18 +1055,11 @@ export function initPokedexRuntime() {
     finally { decoder?.close(); }
   }
 
-  function measureArtwork(source, preserveAllPixels = false) {
-    if (!source) return Promise.resolve(null);
-    const cacheKey = preserveAllPixels ? `${source}|full-alpha` : source;
-    if (artworkBounds.has(cacheKey)) return artworkBounds.get(cacheKey);
-    if (/\.gif(?:[?#]|$)/i.test(source) || source.startsWith("data:image/gif")) {
-      const animation = measureAnimatedArtwork(source);
-      artworkBounds.set(cacheKey, animation);
-      return animation;
-    }
-    const measurement = new Promise((resolve) => {
+  function measureStaticArtwork(source, preserveAllPixels = false) {
+    return new Promise((resolve) => {
       const image = new Image();
       image.crossOrigin = "anonymous";
+      image.decoding = "async";
       let settled = false;
       const finish = (result) => {
         if (settled) return;
@@ -1104,14 +1126,30 @@ export function initPokedexRuntime() {
       };
       image.src = source;
     });
-    artworkBounds.set(cacheKey, measurement);
-    return measurement;
+  }
+
+  function measureArtwork(source, preserveAllPixels = false) {
+    if (!source) return Promise.resolve(null);
+    const cacheKey = preserveAllPixels ? `${source}|full-alpha` : source;
+    if (artworkBounds.has(cacheKey)) {
+      const measurement = artworkBounds.get(cacheKey);
+      // Refresh insertion order so frequently used measurements survive cache eviction.
+      artworkBounds.delete(cacheKey);
+      artworkBounds.set(cacheKey, measurement);
+      return measurement;
+    }
+    const isAnimated = /\.gif(?:[?#]|$)/i.test(source) || source.startsWith("data:image/gif");
+    const measurement = isAnimated
+      ? measureAnimatedArtwork(source).then((animated) => animated || measureStaticArtwork(source, preserveAllPixels))
+      : measureStaticArtwork(source, preserveAllPixels);
+    return cacheArtworkMeasurement(cacheKey, measurement);
   }
 
   function preloadImage(source, signal = new AbortController().signal) {
     return new Promise((resolve, reject) => {
       signal.throwIfAborted();
       const image = new Image();
+      image.decoding = "async";
       const finish = (error) => {
         window.clearTimeout(timeout);
         signal.removeEventListener("abort", abort);
@@ -1383,6 +1421,7 @@ export function initPokedexRuntime() {
     elements.captureToggle.setAttribute("aria-pressed", String(caught));
     elements.captureToggle.setAttribute("aria-label", caught ? `Release ${variantLabel} Pokémon` : `Capture ${variantLabel} Pokémon`);
     elements.captureToggle.title = caught ? `Release ${variantLabel} Pokémon` : `Capture ${variantLabel} Pokémon`;
+    if (!capturing) elements.captureToggle.classList.remove("is-capturing", "is-releasing");
   }
 
   function resetCapture() {
@@ -1391,6 +1430,7 @@ export function initPokedexRuntime() {
     captureAnimations.clear();
     capturing = false;
     setCapturePresentation(false);
+    elements.captureToggle.classList.remove("is-capturing", "is-releasing");
     elements.captureBall.hidden = true;
     elements.captureToggle.disabled = true;
     elements.captureToggle.setAttribute("aria-pressed", "false");
@@ -1438,6 +1478,8 @@ export function initPokedexRuntime() {
     state.shinyController?.abort();
     state.shinyController = null;
     elements.captureToggle.disabled = true;
+    elements.captureToggle.classList.remove("is-capturing");
+    elements.captureToggle.classList.add("is-releasing");
     elements.shinyToggle.disabled = true;
     elements.captureStatus.textContent = "Releasing Pokémon...";
     try {
@@ -1487,6 +1529,7 @@ export function initPokedexRuntime() {
         captureAnimations.clear();
         elements.captureBall.hidden = true;
         capturing = false;
+        elements.captureToggle.classList.remove("is-capturing", "is-releasing");
         updateCaptureControl();
         elements.shinyToggle.disabled = !canTogglePokemonState(state.currentPokemon);
       }
@@ -1505,6 +1548,8 @@ export function initPokedexRuntime() {
     state.shinyController?.abort();
     state.shinyController = null;
     elements.captureToggle.disabled = true;
+    elements.captureToggle.classList.remove("is-releasing");
+    elements.captureToggle.classList.add("is-capturing");
     elements.shinyToggle.disabled = true;
     elements.captureStatus.textContent = "Capturing...";
     try {
@@ -1545,9 +1590,9 @@ export function initPokedexRuntime() {
         const success = "255,60,82";
         await Promise.all([
           captureMotion(elements.captureBall, [
-            { transform: "scale(1)", opacity: 1, boxShadow: `0 0 0 0 rgba(${success},.7)` },
-            { transform: "scale(1.16)", opacity: 1, boxShadow: `0 0 0 20px rgba(${success},0)`, offset: .48 },
-            { transform: "scale(.78)", opacity: 0, boxShadow: `0 0 0 28px rgba(${success},0)` }
+            { transform: "scale(1)", opacity: 1, filter: "brightness(1) drop-shadow(0 0 0 rgba(255,60,82,0))" },
+            { transform: "scale(1.08)", opacity: 1, filter: `brightness(1.7) drop-shadow(0 0 5px rgba(${success},.82)) drop-shadow(0 0 11px rgba(${success},.38))`, offset: .42 },
+            { transform: "scale(.78)", opacity: 0, filter: `brightness(1.08) drop-shadow(0 0 8px rgba(${success},0))` }
           ], CAPTURE_TIMING.confirm),
           captureMotion(elements.pokemonArt, [
             { transform: "scale(.92)", opacity: 0, filter: `brightness(2) drop-shadow(0 0 18px ${glow})` },
@@ -1573,6 +1618,7 @@ export function initPokedexRuntime() {
         captureAnimations.clear();
         elements.captureBall.hidden = true;
         capturing = false;
+        elements.captureToggle.classList.remove("is-capturing", "is-releasing");
         updateCaptureControl();
         elements.shinyToggle.disabled = !canTogglePokemonState(state.currentPokemon);
       }
@@ -2043,7 +2089,7 @@ export function initPokedexRuntime() {
       drawer.inert = !open;
       anyOpen ||= open;
     });
-    const covered = compactLayout.matches && anyOpen;
+    const covered = elements.pokedex.classList.contains("side-drawers-inside") && anyOpen;
     elements.pokedex.classList.toggle("drawer-covered", covered);
     if (covered && (elements.pokemonState.contains(document.activeElement) ||
         [elements.searchToggle, elements.albumToggle].includes(document.activeElement))) {
@@ -2068,7 +2114,7 @@ export function initPokedexRuntime() {
     if (!state.currentPokemon || state.albumOpen || state.gymOpen) return;
     const className = `drawer-${name}-open`;
     const willOpen = !elements.pokedex.classList.contains(className);
-    if (willOpen && compactLayout.matches) closeDrawers();
+    if (willOpen && elements.pokedex.classList.contains("side-drawers-inside")) closeDrawers();
     elements.pokedex.classList.toggle(className, willOpen);
     syncDrawers();
   }
@@ -2137,7 +2183,7 @@ export function initPokedexRuntime() {
       for (const source of candidates) {
         try {
           return await new Promise((resolve, reject) => {
-            const img = new Image(); img.crossOrigin = "anonymous";
+            const img = new Image(); img.crossOrigin = "anonymous"; img.decoding = "async";
             const timer = window.setTimeout(() => { img.onload = img.onerror = null; img.src = ""; reject(new Error("SPRITE_TIMEOUT")); }, 6000);
             img.onerror = () => { window.clearTimeout(timer); reject(new Error("SPRITE_UNAVAILABLE")); };
             img.onload = () => {
@@ -2171,7 +2217,7 @@ export function initPokedexRuntime() {
     identity.append(makeElement("strong", "", pokemon.name), makeElement("span", "", "#" + String(pokemon.id).padStart(3, "0")));
     const variant = makeElement("span", "album-variant"); heading.append(identity, variant);
     const frame = makeElement("div", "album-sprite-frame");
-    const sprite = document.createElement("img"); sprite.hidden = true; frame.append(sprite);
+    const sprite = document.createElement("img"); sprite.decoding = "async"; sprite.hidden = true; frame.append(sprite);
     const open = makeElement("button", "album-card-open"); open.type = "button";
     open.setAttribute("aria-label", "View " + pokemon.name + ", #" + pokemon.id + (owned ? "" : ", not captured"));
     open.addEventListener("click", () => openAlbumDetail(pokemon.id, shiny));
@@ -2340,7 +2386,6 @@ export function initPokedexRuntime() {
     elements.albumEmpty.hidden = entries.length !== 0;
     sizeAlbumPage();
     const pageCount = Math.max(1, Math.ceil(entries.length / albumPageSize));
-    albumNavigationEntries = entries;
     state.albumPage = Math.min(Math.max(1, state.albumPage), pageCount);
     const start = (state.albumPage - 1) * albumPageSize;
     const visible = entries.slice(start, start + albumPageSize);
@@ -2430,8 +2475,13 @@ export function initPokedexRuntime() {
     });
   }
 
+  function stableStageDimensions() {
+    return stableLayoutSize(deviceStage.clientWidth, deviceStage.clientHeight, window.devicePixelRatio || 1, layoutDprBaseline);
+  }
+
   function isAlbumEmbedded() {
-    return state.albumOpen && albumDeviceLayout(deviceStage.clientWidth, deviceStage.clientHeight).embedded;
+    const stable = stableStageDimensions();
+    return state.albumOpen && albumDeviceLayout(stable.width, stable.height).embedded;
   }
 
   function layoutAlbum() {
@@ -2697,11 +2747,6 @@ export function initPokedexRuntime() {
       bar.setAttribute("aria-label", ready ? `${mode}: ${count} of ${maximum} variants` : `${mode}: loading`);
       output.title = ready ? `${(count / (maximum || 1) * 100).toFixed(1)}%` : "Loading";
     }
-  }
-
-  function progressPageSize() {
-    // Keep the navigation and every metric visible even in landscape phones.
-    return Math.max(2, Math.min(6, Math.floor((window.innerHeight - 245) / 54)));
   }
 
   function renderProgress() {
@@ -2998,7 +3043,7 @@ export function initPokedexRuntime() {
         button.setAttribute("aria-label", `${offset === 0 ? "View" : "Select"} ${entry.name}`);
         button.tabIndex = offset === 0 ? 0 : -1;
         const frame = makeElement("span", "album-related-art");
-        const sprite = document.createElement("img"); frame.append(sprite);
+        const sprite = document.createElement("img"); sprite.decoding = "async"; frame.append(sprite);
         sprite.dataset.pokemonId = String(entry.id);
         button.append(frame);
         button.addEventListener("click", () => {
@@ -3188,13 +3233,7 @@ export function initPokedexRuntime() {
     }
     body.setAttribute("aria-busy", "true");
     if (elements.albumDetail.hidden) albumDetailReturnFocus = document.activeElement;
-    if (elements.albumDetail.hidden) {
-      albumNavigationIndex = albumNavigationEntries.findIndex((entry) => entry.pokemon.id === id);
-      albumRelationsTab = "Evolution";
-    } else {
-      const position = albumNavigationEntries.findIndex((entry) => entry.pokemon.id === id);
-      if (position >= 0) albumNavigationIndex = position;
-    }
+    if (elements.albumDetail.hidden) albumRelationsTab = "Evolution";
     elements.albumDetail.hidden = false;
     elements.albumState.classList.add("profile-active");
     elements.gymBack.setAttribute("aria-label", "Back to album cards");
@@ -3226,15 +3265,18 @@ export function initPokedexRuntime() {
         if (controller.signal.aborted || elements.albumDetail.hidden) return;
       }
       elements.albumDetailTitle.textContent = "Pokémon Profile";
-      elements.albumDetail.style.setProperty("--detail-color", typeColors[pokemon.types[0]] || typeColors.normal);
-      elements.albumDetail.style.setProperty("--detail-secondary", typeColors[pokemon.types[1] || pokemon.types[0]] || typeColors.normal);
+      const detailPrimary = typeColors[pokemon.types[0]] || typeColors.normal;
+      const detailSecondary = typeColors[pokemon.types[1] || pokemon.types[0]] || typeColors.normal;
+      for (const surface of [elements.albumDetail, elements.albumState]) {
+        surface.style.setProperty("--detail-color", detailPrimary);
+        surface.style.setProperty("--detail-secondary", detailSecondary);
+      }
       const hero = makeElement("section", "album-detail-hero");
       hero.classList.toggle("has-no-moves", !pokemon.moves.length);
       const cover = makeElement("div", "album-profile-cover");
       cover.hidden = true;
       const coverBrand = makeElement("div", "album-profile-cover-brand");
-      coverBrand.innerHTML = '<svg viewBox="0 0 32 32" fill="none" aria-hidden="true"><path d="M5.5 6.5c3.6-.8 7.1.1 10.5 2.6v17c-3.4-2.5-6.9-3.4-10.5-2.6v-17Zm21 0c-3.6-.8-7.1.1-10.5 2.6v17c3.4-2.5 6.9-3.4 10.5-2.6v-17Z"/></svg>';
-      coverBrand.append(makeElement("strong", "", "WikiDex"));
+      coverBrand.append(makeElement("span", "album-cover-wikidex", "WikiDex"));
       const mystery = makeElement("div", "album-profile-cover-mark", "?");
       mystery.setAttribute("aria-hidden", "true");
       const coverCaption = makeElement("span", "album-profile-cover-caption");
@@ -3269,6 +3311,7 @@ export function initPokedexRuntime() {
       backdrop.className = "album-card-backdrop";
       backdrop.setAttribute("aria-hidden", "true");
       const artwork = document.createElement("img");
+      artwork.decoding = "async";
       const variantLabel = makeElement("span", "album-detail-id");
       const shinyButton = makeElement("button", "album-profile-shiny");
       shinyButton.append(shinyControlIcon());
@@ -3302,12 +3345,12 @@ export function initPokedexRuntime() {
         hero.classList.toggle("is-uncollected", missingVariant);
         cover.hidden = !missingVariant;
         coverCaption.textContent = `${shiny ? "Shiny" : "Base"} · Not captured`;
-        const alternateVariant = capturedAlternateVariant(pokemon.id, shiny, capturedVariants);
-        coverReturn.hidden = !missingVariant || !alternateVariant;
-        coverReturn.disabled = !missingVariant || !alternateVariant;
-        coverReturn.textContent = alternateVariant?.label || "";
-        coverReturn.setAttribute("aria-label", alternateVariant
-          ? `${alternateVariant.label} for ${pokemon.name}` : "Return to captured variant");
+        const alternateVariant = profileAlternateVariant(pokemon.id, shiny, capturedVariants);
+        coverReturn.hidden = !missingVariant;
+        coverReturn.disabled = !missingVariant;
+        coverReturn.textContent = alternateVariant.label;
+        coverReturn.setAttribute("aria-label", `${alternateVariant.label} for ${pokemon.name}`);
+        coverReturn.dataset.captured = String(alternateVariant.captured);
         cardHeader.setAttribute("aria-hidden", String(missingVariant));
         cardDetails.setAttribute("aria-hidden", String(missingVariant));
         cardDetails.inert = missingVariant;
@@ -3328,8 +3371,7 @@ export function initPokedexRuntime() {
           missingVariant ? "" : `${shiny ? "Shiny " : ""}${pokemon.name}`);
       };
       coverReturn.addEventListener("click", async () => {
-        const alternateVariant = capturedAlternateVariant(pokemon.id, shiny, capturedVariants);
-        if (!alternateVariant) return;
+        const alternateVariant = profileAlternateVariant(pokemon.id, shiny, capturedVariants);
         coverReturn.disabled = true;
         coverReturn.setAttribute("aria-busy", "true");
         let source;
@@ -3344,14 +3386,14 @@ export function initPokedexRuntime() {
           updateVariant(source);
           requestAnimationFrame(() => {
             if (!shinyButton.hidden && !shinyButton.disabled) shinyButton.focus({ preventScroll: true });
+            else if (!coverReturn.hidden) coverReturn.focus({ preventScroll: true });
             else elements.albumDetailClose.focus({ preventScroll: true });
           });
         } catch {
-          if (!controller.signal.aborted) coverReturn.title = "Could not open the captured variant. Try again.";
+          if (!controller.signal.aborted) coverReturn.title = "Could not open the other variant. Try again.";
         } finally {
           coverReturn.removeAttribute("aria-busy");
-          const nextAlternate = capturedAlternateVariant(pokemon.id, shiny, capturedVariants);
-          coverReturn.disabled = hero.classList.contains("is-uncollected") && !nextAlternate;
+          coverReturn.disabled = !hero.classList.contains("is-uncollected");
         }
       });
       shinyButton.disabled = !pokemon.battleShinyImages.length;
@@ -3510,7 +3552,10 @@ export function initPokedexRuntime() {
       });
       if (pokemon.moves.length) cardDetails.append(featuredMoves);
       const footer = makeElement("footer", "album-card-footer");
-      footer.append(makeElement("span", "", `#${String(pokemon.id).padStart(3, "0")} · ${pokemon.classification === "Regular" ? "Species collection" : pokemon.classification}`), makeElement("span", "", "WikiDex"));
+      footer.append(
+        makeElement("span", "", `#${String(pokemon.id).padStart(3, "0")} · ${pokemon.classification === "Regular" ? "Species collection" : pokemon.classification}`),
+        makeElement("span", "album-card-wikidex", "WikiDex"),
+      );
       const cardLower = makeElement("div", "album-card-lower");
       cardLower.append(cardDetails, footer);
       hero.append(cardLower);
@@ -3597,7 +3642,14 @@ export function initPokedexRuntime() {
       body.prepend(mobileNavigation);
       const placeCommand = () => {
         const embedded = isAlbumEmbedded();
-        const compact = embedded || body.clientWidth < 600;
+        const bodyStyle = getComputedStyle(body);
+        const bodyPaddingX = (parseFloat(bodyStyle.paddingLeft) || 0) + (parseFloat(bodyStyle.paddingRight) || 0);
+        const bodyPaddingY = (parseFloat(bodyStyle.paddingTop) || 0) + (parseFloat(bodyStyle.paddingBottom) || 0);
+        const bodyGap = parseFloat(bodyStyle.gap) || 12;
+        const maxCardByHeight = Math.max(0, body.clientHeight - bodyPaddingY) * 63 / 88;
+        const maxCardByWidth = Math.max(0, Math.min(410, (body.clientWidth - bodyPaddingX - bodyGap) * .44));
+        const nonCompactCardWidth = Math.min(410, maxCardByHeight, maxCardByWidth);
+        const compact = embedded || body.clientWidth < 600 || nonCompactCardWidth < 220;
         body.classList.toggle("compact-profile", compact);
         mobileNavigation.hidden = !compact;
         const parent = embedded ? body : elements.albumState;
@@ -3610,7 +3662,10 @@ export function initPokedexRuntime() {
         hero.hidden = compact && mobileView !== "Card";
         info.hidden = compact && mobileView !== "Details";
         albumCommand.hidden = embedded && mobileView !== "Evolution & forms";
-        hero.style.width = compact ? `${Math.max(0,Math.min(body.clientWidth - 28,(body.clientHeight - mobileNavigation.offsetHeight - 42)*63/88,410))}px` : "";
+        const compactCardWidth = Math.max(0, Math.min(body.clientWidth - 28, 410));
+        const profileCardWidth = compact ? compactCardWidth : Math.max(0, nonCompactCardWidth);
+        hero.style.width = `${profileCardWidth}px`;
+        body.style.setProperty("--profile-card-width", `${profileCardWidth}px`);
         hero.style.setProperty("--profile-card-scale", String(hero.offsetWidth / 410 || 1));
         requestAnimationFrame(() => { if(!hero.hidden) void fitVisibleSprite(artwork); });
       };
@@ -3689,7 +3744,7 @@ export function initPokedexRuntime() {
     if (!event.target.closest(".search-zone")) closeSuggestions();
   });
   drawerButtons.forEach((button) => button.addEventListener("click", () => toggleDrawer(button.dataset.drawer)));
-  compactLayout.addEventListener("change", closeDrawers);
+  compactLayout.addEventListener("change", () => requestAnimationFrame(fitDeviceToStage));
   elements.shinyToggle.addEventListener("click", toggleShiny);
   elements.captureToggle.addEventListener("click", capturePokemon);
   elements.albumToggle.addEventListener("click", toggleGym);
@@ -3835,28 +3890,53 @@ export function initPokedexRuntime() {
   };
   const railObserver = new MutationObserver(syncRails);
   railObserver.observe(elements.pokedex, { attributes: true, attributeFilter: ["class"] });
-  const syncSideTriggerPlacement = (scale) => {
-    const stageRect = deviceStage.getBoundingClientRect();
-    const deviceRect = elements.pokedex.getBoundingClientRect();
-    const outside = sideTriggersFitOutside({
-      stageLeft: stageRect.left,
-      stageRight: stageRect.right,
-      viewportWidth: window.innerWidth,
-      deviceLeft: deviceRect.left,
-      deviceRight: deviceRect.right,
+  const sidePlacementState = { width: -1, height: -1, scale: -1, triggersOutside: null, drawersOutside: null };
+  const applySidePlacementMode = () => {
+    elements.pokedex.classList.toggle("side-triggers-inside", !sidePlacementState.triggersOutside);
+    elements.pokedex.classList.toggle("side-drawers-inside", !sidePlacementState.drawersOutside);
+    if (!sidePlacementState.drawersOutside && elements.pokedex.classList.contains("drawer-info-open") &&
+      elements.pokedex.classList.contains("drawer-stats-open")) {
+      elements.pokedex.classList.remove("drawer-stats-open");
+      syncDrawers();
+    }
+  };
+  const syncSideTriggerPlacement = (scale, force = false) => {
+    const stableStage = stableStageDimensions();
+    const widthChanged = Math.abs(stableStage.width - sidePlacementState.width) > 3;
+    const heightChanged = Math.abs(stableStage.height - sidePlacementState.height) > 3;
+    const scaleChanged = Math.abs(scale - sidePlacementState.scale) > .01;
+    // Content changes, sprite loads and drawer animations may trigger observers,
+    // but they must not flip the side-control mode. Recompute only when the
+    // stable layout viewport or actual device scale really changed.
+    if (!force && sidePlacementState.triggersOutside !== null && !widthChanged && !heightChanged && !scaleChanged) {
+      applySidePlacementMode();
+      return;
+    }
+    const deviceWidth = elements.pokedex.offsetWidth * scale;
+    const placement = stableSidePlacement({
+      stageWidth: stableStage.width,
+      deviceWidth,
       triggerWidth: 34 * scale,
+      drawerWidth: Math.max(elements.infoDrawer.offsetWidth, elements.statsDrawer.offsetWidth) * scale,
       margin: 10,
     });
-    elements.pokedex.classList.toggle("side-triggers-inside", !outside);
+    sidePlacementState.width = stableStage.width;
+    sidePlacementState.height = stableStage.height;
+    sidePlacementState.scale = scale;
+    sidePlacementState.triggersOutside = placement.triggersOutside;
+    sidePlacementState.drawersOutside = placement.drawersOutside;
+    applySidePlacementMode();
   };
   const fitDeviceToStage = () => {
     syncAlbumFilterPlacement();
     const stageStyle = getComputedStyle(deviceStage);
-    const availableHeight = deviceStage.clientHeight
-      - parseFloat(stageStyle.paddingTop)
-      - parseFloat(stageStyle.paddingBottom);
-    const availableWidth = deviceStage.clientWidth
-      - parseFloat(stageStyle.paddingLeft) - parseFloat(stageStyle.paddingRight);
+    const zoomFactor = zoomCompensation(window.devicePixelRatio || 1, layoutDprBaseline);
+    const stableStage = stableStageDimensions();
+    const availableHeight = stableStage.height
+      - parseFloat(stageStyle.paddingTop) * zoomFactor
+      - parseFloat(stageStyle.paddingBottom) * zoomFactor;
+    const availableWidth = stableStage.width
+      - parseFloat(stageStyle.paddingLeft) * zoomFactor - parseFloat(stageStyle.paddingRight) * zoomFactor;
     const embedded = isAlbumEmbedded();
     // Never visually hide, inert or aria-hide a subtree while it still owns
     // keyboard focus. Move focus to the visible Album surface first.
@@ -3871,7 +3951,7 @@ export function initPokedexRuntime() {
     const sideInset = parseFloat(deviceStyle.getPropertyValue("--screen-visible-side-inset")) || 0;
     const squareOpening = blueWidth - sideInset * 2;
     const { scale, opening } = state.albumOpen && !embedded
-      ? { scale: albumDeviceLayout(deviceStage.clientWidth, deviceStage.clientHeight).scale, opening: squareOpening }
+      ? { scale: albumDeviceLayout(stableStage.width, stableStage.height).scale, opening: squareOpening }
       : deviceOpeningFit(elements.pokedex.offsetWidth,
       parseFloat(deviceStyle.getPropertyValue("--shell-height")),
       squareOpening,
